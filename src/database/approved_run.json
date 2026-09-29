@@ -1,0 +1,19 @@
+{
+  "run_id": "20260928T190320706702Z_0a18cf5b",
+  "artifacts": {
+    "cleaning_manifest.json": "720165d12ecf27e87823376621c0ae7b0b20fca91130ae4e381884e330712b51",
+    "cleaning_review_flags.csv": "51a4bbe758c9fa7a014b2f563e3c1bd9c8baa182361077657e26522731ea95a5",
+    "cleaning_validation_report.json": "1c9bffbf5903b27faa68a5059af42016ed01df09f6282bd910df5b509278ed7f",
+    "company_financials_standardized.csv": "5245acda56b7d0cb8cc547c913c5abfcde20a55c4b35fbbf988c157a9de0860b",
+    "receiver_general_standardized.csv": "67b2605a6e8576fb3f41aedb1bcb053db5ea1ddb33ed691bcbef96e0893fe0b9"
+  },
+  "protected_inputs": {
+    "data/raw/Company Financials Dataset/Financials.csv": "86b856a1d4453fc1fe76afbc7dff8ed90aa6f0144a841c8daf5cd8934bca6d51",
+    "data/raw/Receiver General Accounting Transactions/tcrg-rgat.csv": "c8c5f31461be56af8081d17174a820a0eb1b70514889a8433df2e1b6ab91879d",
+    "notebooks/01_dataset_inventory.ipynb": "7990fff489122c7df67b897329d6247cbe86c8a1f3ecbdcffaa7ed6f3f60c1fa",
+    "notebooks/02_eda_receiver_general.ipynb": "db5f07ee7ed93fbbaebaca0a8563aa3a83742be311760fea2e4ee91169ac0024",
+    "notebooks/03_eda_company_financials.ipynb": "b4cac62700d2ac515e3dfe55b439d25b77df849ff7c514135a950e06d55fd815",
+    "notebooks/04_cleaning_plan.ipynb": "cbc62d7f42e05df4501c2871d976ff80e940813592663eaa32db263a495d1103",
+    "notebooks/05_data_cleaning.ipynb": "a195753d3172eaf118c3367b085969ec4c924860a54b57e6207157733daebfa9"
+  }
+}
