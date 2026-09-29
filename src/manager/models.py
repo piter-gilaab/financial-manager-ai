@@ -3,6 +3,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
+import json
 from typing import Literal, NotRequired, TypedDict
 
 
@@ -79,3 +80,37 @@ def response(info, status, *, selected=None, result=None, delegated_status=None,
             "summary": summary, "warnings": deepcopy(list(warnings)),
             "limitations": list(info.limitations) if info else [],
             "errors": deepcopy(list(errors)), "clarification": deepcopy(clarification)}
+
+
+@dataclass(frozen=True, slots=True)
+class PlanStep:
+    capability: CapabilityInfo
+    clause: str
+    request_json: str
+    reason_code: str
+    notes: tuple[str, ...] = ()
+
+    def to_dict(self, step_id):
+        return {"step_id": step_id, "capability": self.capability.to_dict(),
+                "original_clause": self.clause, "normalized_request": json.loads(self.request_json),
+                "reason_code": self.reason_code, "notes": list(self.notes)}
+
+
+@dataclass(frozen=True, slots=True)
+class RoutingPlan:
+    original_request: str | None
+    status: str
+    reason_code: str
+    message: str
+    steps: tuple[PlanStep, ...] = ()
+    clarification_field: str | None = None
+    choices: tuple[str, ...] = ()
+
+    def to_dict(self):
+        return {"routing_version": "1.0", "original_request": self.original_request,
+                "status": self.status, "reason_code": self.reason_code, "message": self.message,
+                "steps": [step.to_dict(i) for i, step in enumerate(self.steps, 1)],
+                "clarification": {"field": self.clarification_field, "question": self.message,
+                                  "choices": list(self.choices)} if self.status == "CLARIFICATION_REQUIRED" else None,
+                "blockers": [step.capability.to_dict() for step in self.steps
+                             if step.capability.status != Availability.AVAILABLE]}

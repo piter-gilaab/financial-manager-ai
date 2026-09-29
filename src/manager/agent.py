@@ -1,10 +1,12 @@
-"""Explicit application-level delegation, with no cross-capability intent routing."""
+"""Application facade: explicit delegation plus additive local orchestration."""
 
 from copy import deepcopy
 import json
 
 from .models import Availability, Capability, ManagerResponse, response
 from .registry import CapabilityRegistry
+from .routing import route
+from .orchestration import orchestrate
 
 
 DOMAIN_STATUSES = {"SUCCESS", "PARTIAL", "NO_DATA", "INVALID_REQUEST", "UNSUPPORTED", "DATA_QUALITY_BLOCKER"}
@@ -74,6 +76,14 @@ class FinancialManagerAgent:
         """Return metadata for an exact identifier, or None for an unknown identifier."""
         info = self._registry.get(capability)
         return info.to_dict() if info else None
+
+    def plan(self, question):
+        """Preview top-level routing without executing any capability."""
+        return route(question, self._registry).to_dict()
+
+    def ask(self, question):
+        """Route and execute a bounded natural-language capability request."""
+        return orchestrate(self, question)
 
     def execute(self, *, capability=None, request=None) -> ManagerResponse:
         info = self._registry.get(capability)

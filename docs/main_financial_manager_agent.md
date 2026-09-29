@@ -189,9 +189,10 @@ company-identity absence and statistical peer limitations remain in the speciali
 evidence. Forecasting needs verified cash data; production RAG needs an approved
 real corpus and corpus-informed implementation decisions.
 
-Step 17 offers explicit delegation only. Step 18 may later add approved automatic
-intent/capability routing over this interface, but no such router exists here.
-Step 19 hardening is also unstarted. There is no CLI application, server, API,
+Step 17's `execute` interface continues to offer explicit delegation only.
+[Step 18](orchestration.md) adds `plan` and `ask` over that interface for bounded,
+deterministic capability routing; explicit execution never reroutes requests.
+Step 19 hardening is unstarted. There is no CLI application, server, API,
 frontend, forecast, RAG implementation or deployment in this step.
 
 See [Step 17 validation](step17_validation.md) for exact tests and protected-file

@@ -13,6 +13,8 @@ currency conversion is not implemented.
 - [Step 14 validation](docs/step14_validation.md)
 - [Main Financial Manager — Step 17](docs/main_financial_manager_agent.md)
 - [Step 17 validation](docs/step17_validation.md)
+- [Capability routing and orchestration — Step 18](docs/orchestration.md)
+- [Step 18 validation](docs/step18_validation.md)
 - [Approved query contracts](docs/query_contracts.md)
 - [Data model](docs/data_model.md) and [database schema](docs/database_schema.md)
 
@@ -33,5 +35,8 @@ application interfaces remain unimplemented.
 Phase 6 Step 17 provides `src.manager.FinancialManagerAgent`, a single facade for
 capability discovery and explicit delegation to the existing analysis agent or
 screening service. Forecasting and document retrieval are reported as BLOCKED.
-Automatic capability routing (Step 18) and broader security hardening (Step 19)
-are not implemented.
+Step 18 adds deterministic `manager.plan(question)` and `manager.ask(question)`
+for top-level capability routing. Explicit `manager.execute(...)` is unchanged.
+Independent analysis and screening requests can run sequentially with separate
+results; ambiguous scopes require clarification. Broader security hardening
+(Step 19) is not implemented.
