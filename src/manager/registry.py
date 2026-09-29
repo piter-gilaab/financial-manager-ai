@@ -42,7 +42,7 @@ class CapabilityRegistry:
         return [info.to_dict() for info in self._entries.values()]
 
     def get(self, identifier):
-        return self._entries.get(identifier) if isinstance(identifier, str) else None
+        return self._entries.get(identifier) if type(identifier) in (str, Capability) else None
 
     def delegate(self, capability, payload):
         if capability == Capability.FINANCIAL_ANALYSIS:

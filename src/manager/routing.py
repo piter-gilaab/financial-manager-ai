@@ -124,8 +124,8 @@ def classify(clause, registry):
 
 def route(question, registry):
     """Return an immutable validated top-level plan; never invoke a capability."""
-    if not isinstance(question, str) or not question.strip() or len(question) > 4000:
-        return RoutingPlan(question if isinstance(question, str) else None, "INVALID_REQUEST", "invalid_question",
+    if type(question) is not str or not question.strip() or len(question) > 4000:
+        return RoutingPlan(question if type(question) is str else None, "INVALID_REQUEST", "invalid_question",
                            "Supply a nonempty question of at most 4000 characters.")
     steps = []
     try:

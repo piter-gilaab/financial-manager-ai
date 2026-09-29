@@ -7,6 +7,7 @@ from .models import Availability, Capability, ManagerResponse, response
 from .registry import CapabilityRegistry
 from .routing import route
 from .orchestration import orchestrate
+from .security import is_data_only, require_data_result
 
 
 DOMAIN_STATUSES = {"SUCCESS", "PARTIAL", "NO_DATA", "INVALID_REQUEST", "UNSUPPORTED", "DATA_QUALITY_BLOCKER"}
@@ -14,8 +15,8 @@ AGENT_ONLY_STATUSES = {"CLARIFICATION_REQUIRED", "INVALID_REQUEST", "UNSUPPORTED
 
 
 def validate_payload(capability, payload):
-    if not isinstance(payload, dict) or any(not isinstance(k, str) for k in payload):
-        return "Request must be a JSON object with string property names."
+    if type(payload) is not dict or not is_data_only(payload):
+        return "Request must be a data-only JSON object with string property names and finite values."
     try:
         # Validation only: never round-trip/coerce the delegated payload or decimals.
         json.dumps(payload, allow_nan=False)
@@ -89,7 +90,7 @@ class FinancialManagerAgent:
         info = self._registry.get(capability)
         if info is None:
             message = "Explicitly select one of the four registered capability identifiers."
-            return response(None, "INVALID_REQUEST", selected=capability if isinstance(capability, str) else None,
+            return response(None, "INVALID_REQUEST", selected=capability if type(capability) is str else None,
                             summary=message, errors=[{"code": "unknown_capability", "field": "capability", "message": message}])
         # Availability precedes payload validation: unavailable operations have no
         # invented request schema and cannot trigger any implementation.
@@ -103,6 +104,7 @@ class FinancialManagerAgent:
         # Isolate caller-owned requests from trusted adapters. Expected validation
         # outcomes are returned by those adapters; unexpected failures propagate.
         result = self._registry.delegate(info.identifier, deepcopy(request))
+        require_data_result(result)
         if info.identifier == Capability.FINANCIAL_ANALYSIS:
             return wrap_analysis(info, result)
         return wrap_anomaly(info, result)

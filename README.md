@@ -15,6 +15,8 @@ currency conversion is not implemented.
 - [Step 17 validation](docs/step17_validation.md)
 - [Capability routing and orchestration — Step 18](docs/orchestration.md)
 - [Step 18 validation](docs/step18_validation.md)
+- [Security and privacy boundaries — Step 19](docs/security_privacy_boundaries.md)
+- [Step 19 validation](docs/step19_validation.md)
 - [Approved query contracts](docs/query_contracts.md)
 - [Data model](docs/data_model.md) and [database schema](docs/database_schema.md)
 
@@ -38,5 +40,6 @@ screening service. Forecasting and document retrieval are reported as BLOCKED.
 Step 18 adds deterministic `manager.plan(question)` and `manager.ask(question)`
 for top-level capability routing. Explicit `manager.execute(...)` is unchanged.
 Independent analysis and screening requests can run sequentially with separate
-results; ambiguous scopes require clarification. Broader security hardening
-(Step 19) is not implemented.
+results; ambiguous scopes require clarification. Step 19 enforces data-only manager
+messages, controlled snapshot/provider errors and the existing local-only provider
+policy. It adds no authentication, network transport or deployment security.

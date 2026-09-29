@@ -194,8 +194,9 @@ requests. Step 13's bounded grammar, unknown denomination, missing values and
 unresolved placeholders remain unchanged. Screening remains exploratory in-sample
 IQR with documented sparse/minimum-group limitations, not a validity judgment.
 No entity identity, cash semantics or cross-dataset relationship is invented.
-Forecasting and document retrieval remain blocked. Step 19, API/frontend,
-authentication and deployment are unimplemented.
+Forecasting and document retrieval remain blocked. [Step 19](security_privacy_boundaries.md)
+adds data-only message and controlled error checks; API/frontend, authentication
+and deployment remain unimplemented.
 
 See [Step 18 validation](step18_validation.md) for focused/regression results and
 protected-file checks. Routing/orchestration have their own version 1.0; Step 17,

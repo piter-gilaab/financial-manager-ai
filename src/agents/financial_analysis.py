@@ -5,7 +5,7 @@ from src.financial.models import ContractError
 
 from .explanation import explain
 from .models import RoutingDecision, ToolIntent, agent_response, decision_response, json_copy
-from .provider import InterpretationRequest, LocalQuestionProvider, ProviderError, ProviderLocation
+from .provider import InterpretationRequest, LocalQuestionProvider, ProviderLocation
 from .registry import ToolRegistry
 from .routing import clarify, route
 
@@ -49,13 +49,15 @@ class FinancialAnalysisAgent:
             # can propose a tool. An unconsumed clause never silently disappears.
             grounded = route(question, dataset)
             _, expected = self.registry.prepare(grounded)
-            if self.provider.location != ProviderLocation.LOCAL:
+            if getattr(self.provider, "location", None) != ProviderLocation.LOCAL:
                 raise RoutingDecision("PROVIDER_UNAVAILABLE", "nonlocal_provider_disabled",
                                       "Step 13 enables local providers only; private/hosted transports require a separate privacy review.")
             try:
                 proposed = self.provider.interpret(InterpretationRequest(question, dataset, self.registry.metadata))
-            except ProviderError as error:
-                # Do not echo provider exception bodies, which may contain private context.
+            except Exception as error:
+                # The provider may return an intent, never application errors or
+                # explanations. Even a RoutingDecision raised by adapter code
+                # is an opaque provider failure, not an approved public message.
                 raise RoutingDecision("PROVIDER_ERROR", "interpretation_failed", "The local interpretation provider could not produce an intent.") from error
             _, actual = self.registry.prepare(proposed)
             if actual != expected:
