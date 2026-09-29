@@ -11,6 +11,8 @@ currency conversion is not implemented.
 - [Step 13 validation](docs/step13_validation.md)
 - [Investigation screening — Step 14](docs/anomaly_detection.md)
 - [Step 14 validation](docs/step14_validation.md)
+- [Main Financial Manager — Step 17](docs/main_financial_manager_agent.md)
+- [Step 17 validation](docs/step17_validation.md)
 - [Approved query contracts](docs/query_contracts.md)
 - [Data model](docs/data_model.md) and [database schema](docs/database_schema.md)
 
@@ -27,3 +29,9 @@ interface. Step 14 adds a separate offline statistical screening service with
 global/peer IQR rules and explicit investigation-candidate evidence; agent routing
 remains limited to the original 17 tools. ML models, forecasting, RAG and
 application interfaces remain unimplemented.
+
+Phase 6 Step 17 provides `src.manager.FinancialManagerAgent`, a single facade for
+capability discovery and explicit delegation to the existing analysis agent or
+screening service. Forecasting and document retrieval are reported as BLOCKED.
+Automatic capability routing (Step 18) and broader security hardening (Step 19)
+are not implemented.
