@@ -42,11 +42,11 @@ all authoritative for loading. The older processed run is historical and is not
 selected. The SQLite database and `data/database/load_validation_report.json` are
 generated local artifacts and are Git-ignored.
 
-In the working tree inspected for Step 23, the processed directories were present
-but pre-existing and untracked. They are not Git-ignored, but fresh-clone delivery
-has not been proven. Until the repository snapshot includes the approved bundle,
-obtain those exact files from the same authorized project custodian. Step 24 must
-verify their actual clone behavior.
+Step 24 confirmed that the approved processed bundle is an external custodian
+input alongside the raw CSVs. It is not distributed by Git and there is no
+supported command that regenerates it from the notebooks. Obtain its exact five
+hash-approved files from the authorized project custodian and place them at the
+paths above before rebuilding SQLite.
 
 The Receiver General notebook records official publisher links, but the exact
 provenance chain to the local CSV and its recorded Kaggle redistribution remain

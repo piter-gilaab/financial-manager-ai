@@ -8,6 +8,7 @@ currency conversion is not implemented.
 
 - **[Start here: Financial Manager AI — Technical Guide](docs/financial_manager_ai_guide.md)**
 - [Environment and data provisioning — Step 23](docs/environment_and_data_provisioning.md)
+- [Fresh-clone reproducibility — Step 24](docs/fresh_clone_reproducibility.md)
 - [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
 - [Documentation / architecture review — Step 22](docs/step22_validation.md)
 - [Financial Core usage and architecture](docs/financial_core.md)

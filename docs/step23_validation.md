@@ -136,3 +136,8 @@ deployment responsibilities.
 
 Step 23 is complete. Phase 8 Step 24 — Fresh Clone Reproducibility is the next
 recommended step and was not started here.
+
+Subsequent Step 24 validation resolved the processed-bundle question: the approved
+five-file bundle is an explicitly required external custodian input, not a Git
+artifact or a notebook-regenerated output. See
+[`fresh_clone_reproducibility.md`](fresh_clone_reproducibility.md).
