@@ -13,6 +13,7 @@ from src.database.connection import connect
 from src.database.initialize import apply_schema, build_database
 from src.database.loaders import APPROVED_RUN_ID, digest, load_bundle, read_approved_bundle
 from src.database.validation import validate_database
+from src.financial import FinancialCore
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -174,6 +175,31 @@ class DatabaseTests(unittest.TestCase):
             self.assertEqual([tuple(r) for r in first.execute(query)], [tuple(r) for r in rebuilt.execute(query)])
             query = "SELECT * FROM source_record ORDER BY record_id"
             self.assertEqual([tuple(r) for r in first.execute(query)], [tuple(r) for r in rebuilt.execute(query)])
+
+    def test_clean_rebuild_is_accepted_by_runtime_snapshot(self):
+        root = self.directory / "runtime-root"
+        database = root / "data/database/financial_manager.db"
+        database.parent.mkdir(parents=True)
+        database.hardlink_to(self.path)
+        (root / "data/raw").symlink_to(ROOT / "data/raw", target_is_directory=True)
+        (root / "data/processed").symlink_to(ROOT / "data/processed", target_is_directory=True)
+        (root / "notebooks").symlink_to(ROOT / "notebooks", target_is_directory=True)
+        schema = root / "src/database/schema.sql"
+        schema.parent.mkdir(parents=True)
+        schema.symlink_to(ROOT / "src/database/schema.sql")
+
+        response = FinancialCore(root).query({
+            "contract_version": "1.0",
+            "query_name": "company_financials_record_count",
+            "dataset": "company_financials",
+        })
+
+        self.assertEqual(response["status"], "SUCCESS")
+        self.assertEqual(response["result"]["record_count"], 700)
+        self.assertEqual(
+            response["metadata"]["snapshot"]["database_sha256"],
+            digest(database.read_bytes()),
+        )
 
     def test_raw_processed_and_notebooks_unchanged(self):
         self.bundle.verify_unchanged()

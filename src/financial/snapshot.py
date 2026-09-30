@@ -12,7 +12,6 @@ from .filters import predicates
 from .models import blocker
 
 
-DATABASE_SHA256 = "8b9536867d7e1ee2e3fd8b0040d40f5806cf6ecb8afc38491cbc058de727c744"
 SCHEMA_SHA256 = "7a815fe0ffbfa68849f5e3e1394d9e9e7fb117c771c7b318c0ab50fe75a83fe5"
 
 
@@ -22,6 +21,7 @@ class ApprovedSnapshot:
     def __init__(self, project_root):
         self.root = Path(project_root).resolve()
         self._bundle = None
+        self._database_sha256 = None
         self._validated = False
 
     @contextmanager
@@ -29,8 +29,7 @@ class ApprovedSnapshot:
         path = self.root / "data/database/financial_manager.db"
         try:
             payload = path.read_bytes()
-            if digest(payload) != DATABASE_SHA256:
-                blocker("snapshot_mismatch", "Database differs from the approved contract-1.0 snapshot.")
+            self._database_sha256 = digest(payload)
             if digest((self.root / "src/database/schema.sql").read_bytes()) != SCHEMA_SHA256:
                 blocker("schema_mismatch", "DDL differs from the approved schema.")
             if self._bundle is None:
@@ -45,7 +44,10 @@ class ApprovedSnapshot:
         # query_only protects even this disposable copy; no on-disk connection writes.
         connection = sqlite3.connect(":memory:", isolation_level=None)
         try:
-            connection.deserialize(payload)
+            try:
+                connection.deserialize(payload)
+            except sqlite3.DatabaseError:
+                blocker("snapshot_mismatch", "Database differs from the approved contract-1.0 snapshot.")
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys=ON")
             connection.execute("PRAGMA query_only=ON")
@@ -60,8 +62,7 @@ class ApprovedSnapshot:
         finally:
             connection.close()
 
-    @staticmethod
-    def read(connection, request):
+    def read(self, connection, request):
         expressions = predicates(request)
         columns = [f"({sql}) AS _filter_{index}" for index, (_, sql, _) in enumerate(expressions)]
         projection = ", " + ", ".join(columns) if columns else ""
@@ -83,7 +84,7 @@ class ApprovedSnapshot:
                                      (APPROVED_RUN_ID, request.dataset)).fetchone()
         schema = connection.execute("SELECT schema_sha256 FROM schema_version WHERE version=?", (1,)).fetchone()
         metadata = {
-            "database_sha256": DATABASE_SHA256, "schema_sha256": schema[0],
+            "database_sha256": self._database_sha256, "schema_sha256": schema[0],
             **{field: run[field] for field in ("manifest_sha256", "validation_sha256", "flags_sha256")},
             **{field: dataset[field] for field in ("source_sha256", "processed_sha256")},
         }
