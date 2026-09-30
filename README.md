@@ -17,6 +17,8 @@ currency conversion is not implemented.
 - [Step 18 validation](docs/step18_validation.md)
 - [Security and privacy boundaries — Step 19](docs/security_privacy_boundaries.md)
 - [Step 19 validation](docs/step19_validation.md)
+- [Local CLI workflow — Step 20](docs/cli_workflow.md)
+- [Step 20 validation](docs/step20_validation.md)
 - [Approved query contracts](docs/query_contracts.md)
 - [Data model](docs/data_model.md) and [database schema](docs/database_schema.md)
 
@@ -32,7 +34,7 @@ evidence. It requires no LLM or network service; model providers have a separate
 interface. Step 14 adds a separate offline statistical screening service with
 global/peer IQR rules and explicit investigation-candidate evidence; agent routing
 remains limited to the original 17 tools. ML models, forecasting, RAG and
-application interfaces remain unimplemented.
+web/API interfaces remain unimplemented.
 
 Phase 6 Step 17 provides `src.manager.FinancialManagerAgent`, a single facade for
 capability discovery and explicit delegation to the existing analysis agent or
@@ -43,3 +45,15 @@ Independent analysis and screening requests can run sequentially with separate
 results; ambiguous scopes require clarification. Step 19 enforces data-only manager
 messages, controlled snapshot/provider errors and the existing local-only provider
 policy. It adds no authentication, network transport or deployment security.
+
+Phase 7 Step 20 adds a thin local CLI over that manager. From the repository root:
+
+```sh
+.venv/bin/python -m src.cli capabilities
+.venv/bin/python -m src.cli plan "Find outliers in Profit"
+.venv/bin/python -m src.cli ask "What were total sales by country?" --json
+```
+
+Omit `--json` for readable output. The CLI preserves exact evidence, UNKNOWN
+currency and warnings; unavailable or ambiguous requests report the existing
+blocker/clarification. See the workflow guide for syntax, exit codes and limits.
