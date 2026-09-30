@@ -1,0 +1,2 @@
+# The V1 CLI, database builder, provisioning validator, and unittest suite use
+# only the Python 3.14 standard library and repository source code.

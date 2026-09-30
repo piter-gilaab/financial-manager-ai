@@ -7,6 +7,7 @@ an offline FX lookup interface. Current dataset currencies remain UNKNOWN;
 currency conversion is not implemented.
 
 - **[Start here: Financial Manager AI — Technical Guide](docs/financial_manager_ai_guide.md)**
+- [Environment and data provisioning — Step 23](docs/environment_and_data_provisioning.md)
 - [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
 - [Documentation / architecture review — Step 22](docs/step22_validation.md)
 - [Financial Core usage and architecture](docs/financial_core.md)
@@ -25,7 +26,19 @@ currency conversion is not implemented.
 - [Approved query contracts](docs/query_contracts.md)
 - [Data model](docs/data_model.md) and [database schema](docs/database_schema.md)
 
-Run the tests from the project root with the existing environment:
+Provision the Python 3.14 environment and approved local data before running the
+CLI. The V1 runtime and tests have no third-party dependencies:
+
+```sh
+python3.14 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m src.provisioning
+```
+
+See the [Step 23 provisioning guide](docs/environment_and_data_provisioning.md)
+for the exact data layout and SQLite reconstruction procedure. Run the tests from
+the project root with the activated environment:
 
 ```sh
 .venv/bin/python -B -m unittest discover -s tests -v
