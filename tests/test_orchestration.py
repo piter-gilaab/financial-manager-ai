@@ -69,7 +69,8 @@ class OrchestrationTests(unittest.TestCase):
 
     def test_surface_aliases_preserve_remainder_for_step13(self):
         for original, normalized in (("What were total sales by country?", "What are total sales by country?"),
-                                     ('Summarize sales where country="Canada"', 'Show sales where country="Canada"')):
+                                     ('Summarize sales where country="Canada"', 'Show sales where country="Canada"'),
+                                     ("Analyze Discounts.", "Show Discounts.")):
             self.manager.ask(original)
             self.assertEqual(self.analysis.calls[-1], {"question": normalized})
 
@@ -77,6 +78,8 @@ class OrchestrationTests(unittest.TestCase):
         for question, dataset, measure in (("Show unusually high accounting amounts", "receiver_general", "accounting_amount"),
                                            ("Identify unusual sales records", "company_financials", "sales"),
                                            ("Find outliers in Profit", "company_financials", "profit"),
+                                           ("Find unusual Profit values.", "company_financials", "profit"),
+                                           ("Are there outliers in Sales?", "company_financials", "sales"),
                                            ("Compare Sales to supported peer groups", "company_financials", "sales"),
                                            ("Screen extreme accounting amounts", "receiver_general", "accounting_amount")):
             with self.subTest(question=question):
@@ -107,7 +110,8 @@ class OrchestrationTests(unittest.TestCase):
                 self.assertEqual(out["results"], [])
 
     def test_forecasting_uses_registry_blocker_and_never_executes(self):
-        for question in ("Forecast cash flow for next month", "Predict cash balance", "Predict cash inflows/outflows"):
+        for question in ("Forecast cash flow for next month", "Predict cash balance", "Predict cash inflows/outflows",
+                         "What will my cash balance be next month?"):
             with patch.object(self.manager, "execute", side_effect=AssertionError("Must not execute")):
                 out = self.manager.ask(question)
             self.assertEqual(out["routing"]["status"], "BLOCKED")
@@ -116,6 +120,11 @@ class OrchestrationTests(unittest.TestCase):
             self.assertIn("cash inflows/outflows", blocker["reason"])
             self.assertEqual(out["execution_state"], "NOT_PERFORMED")
             self.assertEqual(out["execution_status"], "CAPABILITY_UNAVAILABLE")
+
+    def test_future_tense_alias_requires_an_approved_cash_forecast_target(self):
+        plan = self.manager.plan("What will cash discounts be next month?")
+        self.assertEqual(plan["status"], "ROUTED")
+        self.assertEqual(plan["steps"][0]["capability"]["identifier"], FA)
 
     def test_document_requests_use_registry_blocker_without_retrieval(self):
         for question in ("What does invoice 123 say?", "Search financial reports", "Find the policy", "Read this PDF"):

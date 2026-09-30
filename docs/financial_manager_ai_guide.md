@@ -443,13 +443,9 @@ The verified outcome is SUCCESS with UNKNOWN currency, not verified company reve
 
 ### B. “Find unusual Profit values.”
 
-This exact wording **currently returns CLARIFICATION_REQUIRED**, with no execution:
-the bounded screening grammar does not consume the trailing `values`. It must
-not silently delete an unrecognized scope word. Use **“Find outliers in Profit”**
-or **“Screen profit”** for the supported path.
-
-Step 18 then selects ANOMALY_DETECTION and constructs the approved CF Profit
-request. The manager calls AnomalyService directly; Step 13 is not involved.
+Step 18 selects ANOMALY_DETECTION and constructs the approved CF Profit request;
+`values` is a recognized surface-language suffix, not a discarded modifier. The
+manager calls AnomalyService directly; Step 13 is not involved.
 The service reads the snapshot, computes global/pricing-peer IQR evidence and
 attaches quality references. The verified outcome is PARTIAL: five unresolved
 Profit values stay unassessed. The explanation says candidates require investigation.

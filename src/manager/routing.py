@@ -54,7 +54,7 @@ def guard(text):
 def analysis_question(clause):
     # Surface-language aliases only. No dataset, field, statistic, filter or
     # RG/CF contract is selected here; all remaining language stays intact.
-    text = re.sub(r"^(please\s+)?summari[sz]e\s+", r"\1Show ", clause, flags=re.I)
+    text = re.sub(r"^(please\s+)?(?:summari[sz]e|analy[sz]e)\s+", r"\1Show ", clause, flags=re.I)
     return re.sub(r"^(please\s+)?what (?:were|was)\s+", r"\1What are ", text, flags=re.I)
 
 
@@ -64,8 +64,9 @@ def anomaly_request(clause):
     text = re.sub(r"^please ", "", text)
     target = r"(?P<target>(?:(?:receiver general|rg|company financials|cf) )?(?:accounting amounts?|sales|profit)(?: records)?)"
     patterns = (
-        r"(?:show|find|identify|detect|screen)(?: me)? (?:the )?(?:unusual|unusually high|unusually low|anomalous|outlying) " + target,
+        r"(?:show|find|identify|detect|screen)(?: me)? (?:the )?(?:unusual|unusually high|unusually low|anomalous|outlying) " + target + r"(?: values)?",
         r"(?:find|identify|detect|show|screen)(?: me)? (?:anomalies|anomaly candidates|outliers|unusual values)(?: in| for| among) " + target,
+        r"are there (?:any )?(?:anomalies|anomaly candidates|outliers|unusual values) in " + target,
         r"screen (?:extreme )?" + target + r"(?: for (?:anomalies|anomaly candidates|outliers|unusual values))?",
         r"compare " + target + r" (?:to|with) (?:their |supported )?(?:peers|peer groups)",
     )
@@ -94,7 +95,8 @@ def classify(clause, registry):
     text = masked(clause).casefold()
     if re.search(r"\b(not|instead|unless|except|then|same|those|these|them)\b|don't|rather than|based on", text):
         clarify("scope_or_dependency_unclear", "State each independent request explicitly without exclusions, negation or references to another result.")
-    forecast = bool(re.search(r"\b(forecast\w*|predict\w*|project\w*)\b", text))
+    forecast = bool(re.search(r"\b(forecast\w*|predict\w*|project\w*)\b", text) or
+                    re.search(r"\b(?:what|how)\b.*\bwill\b.*\bcash[ -](?:flows?|balances?|inflows?|outflows?)\b", text))
     documents = bool(re.search(r"\b(contracts?|invoices?|statements?|policies|policy|procedures?|reports?|pdfs?|documents?|rag)\b", text))
     screening = bool(re.search(r"\b(unusual\w*|outliers?|anomal\w*|screen\w*|peers?)\b", text))
     if sum((forecast, documents, screening)) > 1:

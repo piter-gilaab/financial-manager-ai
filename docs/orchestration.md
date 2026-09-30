@@ -86,8 +86,9 @@ amounts**, **Sales** or **Profit**, optionally prefixed with the matching datase
 name (`Receiver General`/`RG` or `Company Financials`/`CF`). It recognizes:
 
 - `show/find/identify/detect/screen unusual TARGET` (also unusually high/low,
-  anomalous, outlying);
+  anomalous, outlying; optional `values` suffix);
 - `find/identify/detect/show/screen outliers/anomalies/anomaly candidates/unusual values in/for/among TARGET`;
+- `are there [any] outliers/anomalies/anomaly candidates/unusual values in TARGET`;
 - `screen [extreme] TARGET [for outliers/anomalies/anomaly candidates/unusual values]`;
 - `compare TARGET to/with [their/supported] peers/peer groups`.
 
