@@ -37,9 +37,10 @@ def required_paths(project_root):
 def _discover_tests(root):
     tests = root / "tests"
     if not tests.is_dir():
-        return 0
-    suite = unittest.defaultTestLoader.discover(str(tests))
-    return suite.countTestCases()
+        return 0, 0
+    loader = unittest.TestLoader()
+    suite = loader.discover(str(tests))
+    return suite.countTestCases(), len(loader.errors)
 
 
 def _environment_metadata(root):
@@ -122,7 +123,7 @@ def validate_environment(project_root, *, database_path=None):
             ),
         },
         "cli": {"importable": False},
-        "tests": {"discovered": 0, "passed": False},
+        "tests": {"discovered": 0, "import_errors": 0, "passed": False},
         "network_required": False,
         "errors": errors,
     }
@@ -136,10 +137,18 @@ def validate_environment(project_root, *, database_path=None):
         errors.append(f"Application imports failed: {exc}")
 
     try:
-        discovered = _discover_tests(root)
-        report["tests"] = {"discovered": discovered, "passed": discovered > 0}
+        discovered, import_errors = _discover_tests(root)
+        report["tests"] = {
+            "discovered": discovered,
+            "import_errors": import_errors,
+            "passed": discovered > 0 and import_errors == 0,
+        }
         if discovered == 0:
             errors.append("No unittest tests were discovered")
+        if import_errors:
+            errors.append(
+                f"Unittest discovery failed: {import_errors} test module(s) could not be imported"
+            )
     except (ImportError, OSError) as exc:
         errors.append(f"Unittest discovery failed: {exc}")
 

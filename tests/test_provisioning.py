@@ -101,6 +101,23 @@ class ProvisioningTests(unittest.TestCase):
         self.assertTrue(any("Database validation failed" in error
                             for error in report["errors"]))
 
+    def test_test_discovery_rejects_import_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tests = root / "tests"
+            tests.mkdir()
+            (tests / "test_broken_step24.py").write_text(
+                "import module_that_does_not_exist_for_step24\n",
+                encoding="utf-8",
+            )
+
+            report = validate_environment(root)
+
+        self.assertEqual(report["tests"]["discovered"], 1)
+        self.assertFalse(report["tests"]["passed"])
+        self.assertTrue(any("Unittest discovery failed" in error
+                            for error in report["errors"]))
+
 
 if __name__ == "__main__":
     unittest.main()
