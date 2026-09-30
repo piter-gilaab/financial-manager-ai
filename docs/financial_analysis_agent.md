@@ -17,8 +17,10 @@ the actual data model: denominations remain UNKNOWN and company identity is abse
 
 This is one orchestrator, not a multiagent system. It ships a conservative local
 English interpreter and deterministic explanations. No LLM model, credentials,
-network adapter or new dependency is installed. Anomaly detection, forecasting,
-RAG and application interfaces are not available capabilities.
+network adapter or new dependency is installed. This specialized agent exposes
+only the 17 analysis contracts. The current [manager](main_financial_manager_agent.md)
+also delegates to the separate anomaly service and has a [CLI](cli_workflow.md);
+forecasting and document retrieval remain BLOCKED.
 
 ## Interface and execution
 
@@ -234,5 +236,6 @@ identity absence, fractional quantity semantics and unresolved placeholders.
 
 There is no conversational memory, general date parser, trained/local model
 runtime, hosted model client, or model-generated explanation. The callable Python
-interface is ready for a separately scoped CLI or future Financial Manager;
-this step adds no application interface. No Step 14 or later work is implemented.
+interface is now reused by the [Main Financial Manager](main_financial_manager_agent.md)
+and [CLI](cli_workflow.md). Their top-level capability routing does not expand
+this agent's 17-contract routing boundary.

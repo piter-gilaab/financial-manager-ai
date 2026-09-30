@@ -193,8 +193,9 @@ Step 17's `execute` interface continues to offer explicit delegation only.
 [Step 18](orchestration.md) adds `plan` and `ask` over that interface for bounded,
 deterministic capability routing; explicit execution never reroutes requests.
 [Step 19](security_privacy_boundaries.md) now enforces data-only message checks
-and controlled error boundaries. There is no CLI application, server, API,
-frontend, forecast, RAG implementation or deployment in this step.
+and controlled error boundaries. [Step 20](cli_workflow.md) now supplies the CLI,
+validated by [Step 21 acceptance](v1_acceptance.md). There is no server, API,
+web frontend, forecasting/RAG implementation or deployment.
 
 See [Step 17 validation](step17_validation.md) for exact tests and protected-file
 checks. Breaking changes to the facade's envelope or delegation semantics require

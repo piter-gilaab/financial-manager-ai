@@ -140,7 +140,8 @@ Unexpected Core/service integration exceptions still propagate to developers,
 as required by existing tests/contracts. They are not converted into successful
 or normal application responses and are not automatically logged. Any future
 CLI/API error presenter must avoid rendering raw tracebacks to an untrusted user;
-no such interface or generic server error handler is implemented here.
+the [Step 20 CLI](cli_workflow.md) now provides that controlled presenter, including
+syntax, invocation and cancellation errors. No generic server handler exists.
 
 Caller-supplied questions, invalid identifiers and legitimate lineage/quality
 values may be echoed by existing contracts. This is not new internal disclosure;

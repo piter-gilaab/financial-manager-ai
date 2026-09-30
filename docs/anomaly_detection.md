@@ -232,12 +232,15 @@ store. No data is sent externally and no source/processed data is rewritten.
 
 The Step 13 agent and its 17-tool registry remain unchanged. It still rejects
 anomaly requests because its separate routing contract has not been extended.
-The new service is independently callable and testable; a future explicitly
-approved adapter may pass its intact structured evidence to the agent. No
-statistical mathematics or candidate interpretation belongs in prompts.
+The service is independently callable and testable. The current
+[Main Financial Manager](main_financial_manager_agent.md) delegates directly to
+it; [Step 18 routing](orchestration.md) adapts supported screening questions
+without passing them through the Step 13 analysis agent. No statistical mathematics
+or candidate interpretation belongs in prompts.
 
 See [Step 14 validation](step14_validation.md) for exact tests, observed counts
 and protected-file checks. There are no ground-truth labels or measured detection
 accuracy/recall. Currency, grain, summary overlap, independence and provenance
-remain unresolved. The next decision is a separately scoped forecasting
-readiness review; forecasting and RAG are not implemented here.
+remain unresolved. The completed [forecasting](forecasting_readiness.md) and
+[RAG](rag_architecture.md) readiness reviews leave both production capabilities
+BLOCKED; neither is implemented.
