@@ -102,6 +102,13 @@ currency is refused before provider invocation. No production conversion occurs.
 No telemetry, analytics, logging of prompts/evidence, document upload, external
 embedding, web search, credentials or external data flow was added.
 
+The Phase 11 interactive CLI keeps one existing `FinancialManagerSession` in the
+local process. It adds no transcript file, application-managed command history or
+persistence. Its `/status` display omits session identity and uses only the public
+redacted projection; complete evidence and handles are not exposed through
+status. Host terminal, shell, redirected-output, swap and process-inspection
+behavior remain outside the application boundary.
+
 ## Financial evidence and explanations
 
 Specialized results remain authoritative, copied completely into existing manager

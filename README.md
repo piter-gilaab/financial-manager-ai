@@ -25,6 +25,9 @@ currency conversion is not implemented.
   and [validation record](docs/step32_validation.md)
 - [Bounded conversational UX — Step 33](docs/conversational_ux_validation.md) and
   [validation record](docs/step33_validation.md)
+- [Conversational CLI contract — Step 34](docs/conversational_cli_contract.md) and
+  [validation record](docs/step34_validation.md)
+- [Interactive CLI implementation — Step 35 validation](docs/step35_validation.md)
 - [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
 - [Documentation / architecture review — Step 22](docs/step22_validation.md)
 - [Financial Core usage and architecture](docs/financial_core.md)
@@ -98,6 +101,16 @@ for explicit `new_request`, `answer`, `follow_up`, `cancel`, `reset` and `status
 operations. It continues only the two approved clarification types and can
 re-resolve session-issued anomaly-candidate references through fresh authoritative
 execution. State expires after 30 minutes of inactivity or four hours absolute,
-is never persisted, and cannot unlock Forecasting or Document Retrieval. The CLI
-remains one-shot; no chat REPL, provider, network or full conversation history was
-added.
+is never persisted, and cannot unlock Forecasting or Document Retrieval.
+
+Phase 11 exposes that same bounded session through an additive local interactive
+adapter:
+
+```sh
+.venv/bin/python -m src.cli chat
+```
+
+Plain text always starts a new request. Use `/answer` for an approved pending
+clarification and `/follow` for a session-issued anomaly reference; `/help` lists
+the small command vocabulary. Chat is concise-only, process-memory-only and adds
+no provider, network, persistence, transcript or unrestricted conversation memory.

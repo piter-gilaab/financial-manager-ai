@@ -26,7 +26,7 @@ a payment system or a company financial-statement platform.
 
 ```mermaid
 flowchart TD
-    User[User] --> CLI[CLI: capabilities / plan / ask]
+    User[User] --> CLI[CLI: capabilities / plan / ask / chat]
     CLI --> Manager[FinancialManagerAgent]
     Manager -->|ask or plan| Router[Top-level capability routing]
     Router --> Plan[Validated routing plan]
@@ -415,8 +415,11 @@ implemented. See [boundary policy](security_privacy_boundaries.md) for precise l
 ## 15. CLI
 
 The standard-library CLI parses command syntax and calls the manager unchanged:
-`capabilities` → listing, `plan` → preview, `ask` → orchestration. It has no SQL,
-financial logic or second router. Quote the full question as one shell argument.
+`capabilities` → listing, `plan` → preview, `ask` → orchestration. The additive
+`chat` command creates one `FinancialManagerSession`; plain text calls
+`new_request`, and explicit slash commands call the corresponding session
+operations. It has no SQL, financial logic or second router. Quote one-shot
+questions as one shell argument.
 
 Default human output contains labeled statuses/explanations and first-10 previews
 of large evidence collections with explicit returned/total/omitted counts.
@@ -429,10 +432,11 @@ Exit codes: **0** for help or a delivered structured outcome (including blocked,
 clarification, unsupported and no-data), **2** for invalid command syntax, **1** for
 cancellation or unexpected invocation/output failure. Automation must inspect JSON
 statuses; exit 0 does not imply financial execution. Error diagnostics use stderr,
-including in JSON mode. The CLI has no chat loop or pagination. Phase 10 provides
-a separate bounded process-memory Python session API; it is not a persistent CLI
-session store. See [CLI details](cli_workflow.md) and runnable commands in section
-21.
+including in JSON mode. Chat exits cleanly on `/exit`, EOF or Ctrl+C and remains
+concise-only; it does not add pagination. Its Phase 10 session is process-memory
+only and is not a persistent CLI session store. See
+[the chat contract](conversational_cli_contract.md), [CLI details](cli_workflow.md)
+and runnable commands in section 21.
 
 ## 16. End-to-end request examples
 
@@ -471,12 +475,12 @@ invented citation is substituted as financial evidence.
 There is insufficient purpose to choose summary versus screening. Top-level
 clarification requests the measure and purpose; no service executes. Separately,
 “How many records are there?” selects analysis but Step 13 asks which dataset.
-Submit a complete clarified question, such as “Receiver General record count”;
-alternatively, the Phase 10 Python session can accept the approved closed answer
-and reconstruct that complete request through fresh routing. The CLI remains
-one-shot and remembers no earlier answer.
+Submit a complete clarified question, such as “Receiver General record count”,
+or use the interactive CLI's explicit `/answer` command for an approved closed
+continuation. Plain text remains a new request and never becomes an answer
+implicitly.
 
-### F. Bounded Python-session continuation
+### F. Bounded session continuation
 
 `FinancialManagerSession` exposes explicit `new_request`, `answer`, `follow_up`,
 `cancel`, `reset` and `status` operations. It retains only one typed contextual
@@ -486,7 +490,8 @@ top-level analysis/screening choice and canonical record-count dataset choice.
 Supported evidence follow-up is limited to session-issued anomaly-candidate
 handles and always performs fresh routing, registry validation and deterministic
 service execution before returning structured detail. See the
-[Phase 10 validation](conversational_ux_validation.md).
+[Phase 10 validation](conversational_ux_validation.md). Phase 11 exposes these
+same operations through `python -m src.cli chat`; the CLI does not duplicate them.
 
 ## 17. Deterministic versus agent responsibilities
 
@@ -510,9 +515,10 @@ auditable and independently testable when language interpretation changes.
 
 ## 18. Testing strategy
 
-The verified regression baseline is **356 passed, 0 failed, 0 errors and 0
-skipped**. The current full run and Phase 10 review evidence are recorded in
-[Step 33 validation](step33_validation.md); the original V1 review is in
+The verified regression baseline is **369 passed, 0 failed, 0 errors and 0
+skipped**. The current full run and Phase 11 review evidence are recorded in
+[Step 35 validation](step35_validation.md); the Phase 10 review is in
+[Step 33 validation](step33_validation.md), and the original V1 review is in
 [Step 22 validation](step22_validation.md).
 
 | Test layer | What it protects |
@@ -524,6 +530,7 @@ skipped**. The current full run and Phase 10 review evidence are recorded in
 | Manager (31), orchestration (35) | Explicit/automatic delegation, statuses, independent plans/results and blocked capabilities |
 | Security/privacy (18) | Allowlisting, data-only messages, provider/error and evidence boundaries |
 | CLI (25) | Presentation, safe errors, exact JSON and delegation |
+| Conversational CLI (13) | Explicit operation mapping, lifecycle, references, expiry and safe interactive exits |
 | Acceptance (19) | Real CLI subprocesses through approved data/services to final output |
 | Bounded conversation (40) | Clarification/session lifecycle, evidence references, expiry, isolation and fail-closed state |
 
@@ -563,10 +570,10 @@ alignment. CF lacks company identity and verified statement/cash semantics; its
 placeholders, quantity meaning and uneven category histories remain visible.
 Limited history and unsupported targets block forecasting; absent documents block RAG.
 
-Language is bounded English, not arbitrary financial conversation. Phase 10 state
-supports only two clarification types and explicit anomaly-candidate handles via a
-Python API; it adds no implicit pronoun resolution, general memory or CLI chat.
-Screening uses
+Language is bounded English, not arbitrary financial conversation. Conversation
+state supports only two clarification types and explicit anomaly-candidate
+handles through the Python API or its thin interactive CLI adapter; it adds no
+implicit pronoun resolution, general memory or persistent chat. Screening uses
 fixed measures/peers, and automatic screening accepts only supported unfiltered
 targets; advanced approved parameters use Python interfaces. Full human and JSON
 output can be large; concise mode is a fixed preview rather than pagination.
@@ -596,6 +603,7 @@ python -B -m src.cli plan "Find outliers in Profit"
 python -B -m src.cli ask "What were total sales by country?"
 python -B -m src.cli ask "What were total sales by country?" --json
 python -B -m src.cli ask "Forecast cash flow next month"
+python -B -m src.cli chat
 
 # Full regression, including acceptance.
 python -B -m unittest discover -s tests -v

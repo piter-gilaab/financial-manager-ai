@@ -13,6 +13,12 @@ one-shot interface. Adding a REPL/TUI or implicit chat loop would introduce inpu
 lifecycle and presentation decisions unnecessary for validating the bounded state
 model.
 
+Historical scope note: Phase 11 later approved and implemented those input,
+lifecycle and presentation decisions as a thin explicit-command adapter. See the
+[conversational CLI contract](conversational_cli_contract.md) and
+[Step 35 validation](step35_validation.md). The Phase 10 state model described
+here is unchanged.
+
 ## Supported behavior
 
 Clarification continuation is restricted to:
