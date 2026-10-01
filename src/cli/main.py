@@ -3,8 +3,9 @@
 import argparse
 import sys
 
-from src.manager import FinancialManagerAgent
+from src.manager import FinancialManagerAgent, FinancialManagerSession
 
+from .chat import run_chat
 from .formatting import answer, capabilities, details, plan, terminal_text
 
 
@@ -34,7 +35,7 @@ class CLIParser(argparse.ArgumentParser):
         raise CLIUsageError()
 
 
-def main(argv=None, *, manager=None, stdout=None, stderr=None):
+def main(argv=None, *, manager=None, session=None, stdin=None, stdout=None, stderr=None):
     stdout = sys.stdout if stdout is None else stdout
     stderr = sys.stderr if stderr is None else stderr
     parser = CLIParser(prog="python -m src.cli", allow_abbrev=False, output=stdout)
@@ -46,6 +47,8 @@ def main(argv=None, *, manager=None, stdout=None, stderr=None):
     preview.add_argument("question", help="One quoted financial question.")
     ask = commands.add_parser("ask", help="Ask the Financial Manager.", allow_abbrev=False, output=stdout)
     ask.add_argument("question", help="One quoted financial question.")
+    chat = commands.add_parser("chat", help="Start a bounded interactive session.",
+                               allow_abbrev=False, output=stdout)
     for command in (catalog, preview, ask):
         command.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
                              help="Emit the complete structured response.")
@@ -55,6 +58,12 @@ def main(argv=None, *, manager=None, stdout=None, stderr=None):
         args = parser.parse_args(argv)
         if args.json and args.full:
             raise CLIUsageError()
+        if args.command == "chat":
+            if args.json or args.full:
+                raise CLIUsageError()
+            if session is None:
+                session = FinancialManagerSession(manager=manager)
+            return run_chat(session, stdin=stdin, stdout=stdout)
         manager = FinancialManagerAgent() if manager is None else manager
         if args.command == "capabilities":
             result, render = manager.list_capabilities(), capabilities

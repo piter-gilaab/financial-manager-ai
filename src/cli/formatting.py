@@ -8,6 +8,10 @@ from src.manager.security import is_data_only
 
 PREVIEW_SIZE = 10
 EXPLANATION_PREVIEW_CHARACTERS = 2_000
+DEFAULT_USAGE_HINTS = (
+    "Use --full for expanded human output.",
+    "Use --json for complete structured evidence.",
+)
 
 
 def terminal_text(text):
@@ -154,7 +158,7 @@ def plan(decision):
     return "\n".join(lines)
 
 
-def answer(result, *, full=False):
+def answer(result, *, full=False, usage_hints=DEFAULT_USAGE_HINTS):
     lines = [f"Status: {result['execution_status']}", f"Execution: {result['execution_state']}",
              plan(result["routing"])]
     unknown_currency = False
@@ -210,6 +214,5 @@ def answer(result, *, full=False):
             notes.append("Coverage and exclusions describe which source records participated and which did not.")
         if notes:
             lines.extend(("Terminology:", *notes))
-        lines.extend(("Use --full for expanded human output.",
-                      "Use --json for complete structured evidence."))
+        lines.extend(usage_hints)
     return "\n".join(lines)
