@@ -2,5 +2,6 @@
 
 from .agent import FinancialManagerAgent
 from .models import Availability, Capability
+from .session import FinancialManagerSession
 
-__all__ = ["FinancialManagerAgent", "Capability", "Availability"]
+__all__ = ["FinancialManagerAgent", "FinancialManagerSession", "Capability", "Availability"]
