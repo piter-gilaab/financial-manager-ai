@@ -17,6 +17,8 @@ currency conversion is not implemented.
   [validation record](docs/step28_validation.md)
 - [Conversational UX readiness — Step 29](docs/conversational_ux_readiness.md) and
   [validation record](docs/step29_validation.md)
+- [Conversation state contract — Step 30](docs/conversation_state_contract.md) and
+  [validation record](docs/step30_validation.md)
 - [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
 - [Documentation / architecture review — Step 22](docs/step22_validation.md)
 - [Financial Core usage and architecture](docs/financial_core.md)
