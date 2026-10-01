@@ -28,6 +28,8 @@ currency conversion is not implemented.
 - [Conversational CLI contract — Step 34](docs/conversational_cli_contract.md) and
   [validation record](docs/step34_validation.md)
 - [Interactive CLI implementation — Step 35 validation](docs/step35_validation.md)
+- [Conversational CLI validation — Step 36](docs/conversational_cli_validation.md)
+  and [validation record](docs/step36_validation.md)
 - [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
 - [Documentation / architecture review — Step 22](docs/step22_validation.md)
 - [Financial Core usage and architecture](docs/financial_core.md)
