@@ -209,7 +209,43 @@ class V1AcceptanceTests(unittest.TestCase):
                      "unresolved_placeholder", "sale_price", "numeric_peer_size", "lineage",
                      evidence["result"]["references"][0]["upper_fence"]):
             self.assertIn(text, human)
-        self.assertNotRegex(human.lower(), r"\b(fraud|misconduct|malicious|suspicious transaction)\b")
+        self.assertIn("it is not fraud, error, misconduct, probability, or certainty", human)
+        self.assertNotRegex(human.lower(), r"\b(malicious|suspicious transaction)\b")
+
+    def test_default_screening_preview_is_bounded_and_uses_authoritative_order(self):
+        evidence = self.anomaly.analyze({"analysis_version": "1.0", "dataset": "company_financials",
+                                         "measure": "profit"})
+        human = self.cli("ask", "Screen profit")
+        items = evidence["result"]["items"]
+
+        self.assertLess(len(human), 100_000)
+        self.assertIn("Showing 10 of 700 items; 690 omitted.", human)
+        self.assertIn('"returned_item_count": 10', human)
+        self.assertIn('"total_item_count": 700', human)
+        self.assertIn('"omitted_item_count": 690', human)
+        positions = [human.index(item["lineage"]["record_id"]) for item in items[:10]]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("Use --full for expanded human output.", human)
+        self.assertIn("Use --json for complete structured evidence.", human)
+
+    def test_screening_preview_includes_references_used_by_previewed_assessments(self):
+        evidence = self.anomaly.analyze({"analysis_version": "1.0", "dataset": "receiver_general",
+                                         "measure": "accounting_amount"})
+        human = self.cli("ask", "Screen accounting amounts")
+        reference_ids = []
+        for item in evidence["result"]["items"][:10]:
+            for assessment in item["assessments"].values():
+                reference_id = assessment["reference_id"]
+                if reference_id is not None and reference_id not in reference_ids:
+                    reference_ids.append(reference_id)
+        references = {item["reference_id"]: item for item in evidence["result"]["references"]}
+
+        self.assertGreater(len(reference_ids), 1)
+        for reference_id in reference_ids:
+            reference = references[reference_id]
+            self.assertIn(reference_id, human)
+            self.assertIn(reference["upper_fence"], human)
+            self.assertIn(str(reference["numeric_size"]), human)
 
     def test_plan_reports_the_same_route_without_opening_database_or_producing_evidence(self):
         question = "Sales by country"

@@ -16,6 +16,7 @@ is required:
 .venv/bin/python -m src.cli ask "What were total sales by country?"
 .venv/bin/python -m src.cli ask "Discount analysis" --json
 .venv/bin/python -m src.cli ask "Screen profit" --json
+.venv/bin/python -m src.cli ask "Screen profit" --full
 .venv/bin/python -m src.cli ask "Forecast cash flow next month"
 .venv/bin/python -m src.cli ask "What does invoice 123 say?"
 .venv/bin/python -m src.cli ask "Check my financial data"
@@ -25,7 +26,8 @@ is required:
 `python -m src.cli` is equivalent when the existing environment is activated.
 Quote the entire question as one shell argument. For double-quoted category
 values inside a question, use shell single quotes around the whole question.
-`--json` works before or after the subcommand; each subcommand has `--help`.
+`--json` and `--full` work before or after the subcommand; they are mutually
+exclusive. Each subcommand has `--help`.
 
 | Command | Existing application interface | Behavior |
 |---|---|---|
@@ -40,15 +42,23 @@ The Python-only explicit `execute(...)` interface is unchanged.
 
 ## Output and application outcomes
 
-Human output uses labeled status/routing information, explanations and indented
-structured evidence. Financial amounts, record accounting, exclusions, coverage,
-UNKNOWN currency and quality warnings stay visible. Screening retains values,
-reference fences, peer definitions/sizes, lineage and CANDIDATE / NOT_SELECTED /
-NOT_ASSESSED. Candidates require investigation; the CLI makes no fraud conclusion.
-Evidence is not recalculated, sorted, truncated or relabeled.
+Default human output uses labeled status/routing information, explanations and a
+deterministic preview of structured evidence. Lists over 10 entries show their
+first 10 entries in existing order and disclose returned, total and omitted counts.
+Anomaly reference lists are the deliberate exception: they show every reference
+named by the first 10 displayed assessments, in existing reference order, so the
+displayed fences and peer evidence remain resolvable; omissions are still counted.
+Financial amounts, record accounting, exclusions, coverage, UNKNOWN currency and
+quality warnings stay visible. Exact duplicate warnings are shown once; distinct
+warnings remain. Screening retains previewed values, reference fences, peer
+definitions/sizes, lineage and CANDIDATE / NOT_SELECTED / NOT_ASSESSED. CANDIDATE
+means a statistical screening candidate for investigation, not fraud or certainty.
+Evidence is not recalculated, sorted, reclassified or mutated.
 
-JSON output is the complete manager return value, without a new wrapper. Existing
-decimal strings remain unchanged; any finite Decimal objects serialize as exact
+`--full` emits expanded human evidence using the prior representation and can be
+large. `--json` remains the complete manager return value without a new wrapper.
+
+Existing decimal strings remain unchanged; any finite Decimal objects serialize as exact
 fixed-point strings, never binary floats. Non-data objects and nonfinite values
 fail safely using the existing Step 19 data boundary. Human formatting may unwrap
 the analysis envelope for display; JSON preserves the entire envelope and digest.
@@ -86,6 +96,7 @@ redactor or OS/process security layer.
 Language support is the existing bounded English grammar; see
 [orchestration](orchestration.md) for exact screening scope and clarification rules.
 There is no REPL, history, session memory, paging, UI/server, forecast or retrieval.
-Large screening results can be verbose; JSON preserves all evidence rather than
-hiding rows. Advanced structured filters remain available through the Python API.
-Step 21 acceptance work and Step 22 documentation review are not included.
+Concise mode is a fixed first-10 preview, not pagination or ranking. Expanded human
+and JSON modes can be large; JSON preserves all evidence rather than hiding rows.
+Advanced structured filters remain available through the Python API. See
+[the Step 27 presentation contract](concise_cli_presentation.md).

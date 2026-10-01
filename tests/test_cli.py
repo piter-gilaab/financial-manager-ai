@@ -87,9 +87,184 @@ class CLITests(unittest.TestCase):
         for term in ("CANDIDATE", "NOT_SELECTED", "NOT_ASSESSED", "12.0000010001", "12.000001",
                      '"numeric_size": 30', "segment", "sale_price", "fixture-9", "currency_unknown", "UNKNOWN"):
             self.assertIn(term, out.getvalue())
-        for term in ("fraud", "misconduct", "suspicious transaction"):
-            self.assertNotIn(term, out.getvalue().lower())
+        self.assertIn("CANDIDATE = statistical screening candidate for investigation", out.getvalue())
+        self.assertIn("it is not fraud, error, misconduct, probability, or certainty", out.getvalue())
+        self.assertNotIn("suspicious transaction", out.getvalue().lower())
         self.assertEqual(manager.answer, before)
+
+    def test_default_human_output_previews_large_evidence_without_mutation(self):
+        manager, out, err = CLIStub(), StringIO(), StringIO()
+        evidence = manager.answer["results"][0]["response"]["delegated_result"]["tool_result"]
+        evidence["result"]["items"] = [
+            {"lineage": {"record_id": f"fixture-{index:03d}"}, "observed_value": str(index)}
+            for index in range(25)
+        ]
+        before = deepcopy(manager.answer)
+
+        self.assertEqual(main(["ask", "Screen profit"], manager=manager, stdout=out, stderr=err), 0)
+
+        rendered = out.getvalue()
+        self.assertLess(len(rendered), 10_000)
+        self.assertIn("Showing 10 of 25 items; 15 omitted.", rendered)
+        self.assertIn("fixture-000", rendered)
+        self.assertIn("fixture-009", rendered)
+        self.assertNotIn("fixture-010", rendered)
+        self.assertIn("Use --full for expanded human output.", rendered)
+        self.assertIn("Use --json for complete structured evidence.", rendered)
+        self.assertEqual(manager.answer, before)
+        self.assertEqual(err.getvalue(), "")
+
+    def test_default_human_output_bounds_repeated_explanation_detail(self):
+        manager, out = CLIStub(), StringIO()
+        manager.answer["results"][0]["response"]["summary"] = "Summary.\n" + ("quality-detail " * 1_000)
+
+        self.assertEqual(main(["ask", "Sales"], manager=manager, stdout=out, stderr=StringIO()), 0)
+
+        rendered = out.getvalue()
+        self.assertLess(len(rendered), 10_000)
+        self.assertIn("characters omitted from explanation", rendered)
+
+    def test_concise_warning_display_deduplicates_exact_entries_only(self):
+        manager, out = CLIStub(), StringIO()
+        evidence = manager.answer["results"][0]["response"]["delegated_result"]["tool_result"]
+        duplicate = {"code": "fixture_missing", "message": "Same warning.", "scope": "measure"}
+        distinct = {"code": "currency_unknown", "message": "Different warning.", "scope": "dataset"}
+        evidence["quality"]["warnings"] = [duplicate, distinct]
+        manager.answer["results"][0]["response"]["warnings"] = [deepcopy(duplicate), deepcopy(distinct)]
+        manager.answer["warnings"] = [{"step_id": 1, "items": [deepcopy(duplicate), deepcopy(distinct)]}]
+
+        self.assertEqual(main(["ask", "Sales"], manager=manager, stdout=out, stderr=StringIO()), 0)
+
+        rendered = out.getvalue()
+        self.assertEqual(rendered.count("Same warning."), 1)
+        self.assertEqual(rendered.count("Different warning."), 1)
+        self.assertIn("fixture_missing", rendered)
+        self.assertIn("currency_unknown", rendered)
+
+    def test_concise_explanation_does_not_repeat_structured_warning_lines(self):
+        manager, out = CLIStub(), StringIO()
+        warning = {"code": "fixture_missing", "message": "Same warning.", "scope": "measure"}
+        response = manager.answer["results"][0]["response"]
+        response["summary"] = (
+            "Result summary.\n"
+            'Quality warning: {"code": "fixture_missing", "message": "Same warning."}.\n'
+            'Quality flags: [{"flag": "fixture_missing"}].\n'
+            "Result conclusion."
+        )
+        response["delegated_result"]["tool_result"]["quality"]["warnings"] = [warning]
+        response["warnings"] = [deepcopy(warning)]
+        manager.answer["warnings"] = [{"step_id": 1, "items": [deepcopy(warning)]}]
+
+        self.assertEqual(main(["ask", "Sales"], manager=manager, stdout=out, stderr=StringIO()), 0)
+
+        rendered = out.getvalue()
+        self.assertIn("Result summary.", rendered)
+        self.assertIn("Result conclusion.", rendered)
+        self.assertNotIn("Quality warning:", rendered)
+        self.assertNotIn("Quality flags:", rendered)
+        self.assertEqual(rendered.count("Same warning."), 1)
+
+    def test_concise_warning_display_keeps_all_distinct_warnings(self):
+        manager, out = CLIStub(), StringIO()
+        warnings = [{"code": f"warning_{index}", "message": f"Distinct warning {index}."}
+                    for index in range(12)]
+        evidence = manager.answer["results"][0]["response"]["delegated_result"]["tool_result"]
+        evidence["quality"]["warnings"] = warnings
+
+        self.assertEqual(main(["ask", "Sales"], manager=manager, stdout=out, stderr=StringIO()), 0)
+
+        for warning in warnings:
+            self.assertIn(warning["code"], out.getvalue())
+            self.assertIn(warning["message"], out.getvalue())
+
+    def test_deduplicated_warning_retains_every_applicable_step(self):
+        manager, out = CLIStub(), StringIO()
+        warning = {"code": "currency_unknown", "message": "Currency is UNKNOWN.", "scope": "dataset"}
+        first = manager.answer["results"][0]
+        first["response"]["delegated_result"]["tool_result"]["quality"]["warnings"] = [warning]
+        first["response"]["warnings"] = [deepcopy(warning)]
+        second = deepcopy(first)
+        second.update(step_id=2, capability="ANOMALY_DETECTION")
+        manager.answer["results"].append(second)
+        manager.answer["warnings"] = [
+            {"step_id": 1, "items": [deepcopy(warning)]},
+            {"step_id": 2, "items": [deepcopy(warning)]},
+        ]
+
+        self.assertEqual(main(["ask", "Sales and screening"], manager=manager,
+                              stdout=out, stderr=StringIO()), 0)
+
+        rendered = out.getvalue()
+        self.assertEqual(rendered.count("Currency is UNKNOWN."), 1)
+        self.assertIn('"applies_to_steps": [', rendered)
+        context = rendered[rendered.index('"applies_to_steps": ['):]
+        self.assertLess(context.index("1"), context.index("2"))
+
+    def test_terminology_notes_follow_structured_evidence_not_message_words(self):
+        manager, out = CLIStub(), StringIO()
+        response = manager.answer["results"][0]["response"]
+        response["summary"] = "User text mentions UNKNOWN and CANDIDATE."
+        evidence = response["delegated_result"]["tool_result"]
+        evidence["currency"] = None
+        evidence["quality"]["warnings"] = []
+        response["warnings"] = []
+
+        self.assertEqual(main(["ask", "Sales"], manager=manager, stdout=out, stderr=StringIO()), 0)
+
+        rendered = out.getvalue()
+        self.assertNotIn("UNKNOWN currency means", rendered)
+        self.assertNotIn("CANDIDATE = statistical screening candidate", rendered)
+
+    def test_large_all_linked_reference_preview_discloses_zero_omissions(self):
+        manager, out = CLIStub(), StringIO()
+        response = manager.answer["results"][0]["response"]
+        response["delegated_result"] = {
+            "status": "SUCCESS",
+            "result": {
+                "references": [{"reference_id": "global"}]
+                              + [{"reference_id": f"peer:{index}"} for index in range(1, 11)],
+                "items": [
+                    {"assessments": {"global": {"reference_id": "global"},
+                                      "peer": {"reference_id": f"peer:{index}"}}}
+                    for index in range(1, 11)
+                ],
+            },
+            "currency": {"status": "UNKNOWN", "code": None},
+            "quality": {"warnings": [], "flags": []},
+        }
+        response["warnings"] = []
+
+        self.assertEqual(main(["ask", "Screen values"], manager=manager,
+                              stdout=out, stderr=StringIO()), 0)
+
+        rendered = out.getvalue()
+        self.assertIn("Showing 11 of 11 linked items; 0 omitted.", rendered)
+        self.assertIn('"returned_item_count": 11', rendered)
+        self.assertIn('"omitted_item_count": 0', rendered)
+
+    def test_full_human_mode_exposes_expanded_evidence(self):
+        manager, out, err = CLIStub(), StringIO(), StringIO()
+        evidence = manager.answer["results"][0]["response"]["delegated_result"]["tool_result"]
+        evidence["result"]["items"] = [
+            {"lineage": {"record_id": f"fixture-{index:03d}"}, "observed_value": str(index)}
+            for index in range(25)
+        ]
+
+        self.assertEqual(main(["ask", "Screen profit", "--full"], manager=manager, stdout=out, stderr=err), 0)
+
+        self.assertIn("fixture-024", out.getvalue())
+        self.assertNotIn("items; 15 omitted", out.getvalue())
+        self.assertNotIn("Use --json for complete structured evidence.", out.getvalue())
+        self.assertEqual(err.getvalue(), "")
+
+    def test_json_and_full_modes_are_mutually_exclusive(self):
+        manager, out, err = CLIStub(), StringIO(), StringIO()
+
+        self.assertEqual(main(["ask", "Sales", "--json", "--full"], manager=manager, stdout=out, stderr=err), 2)
+
+        self.assertEqual(manager.calls, [])
+        self.assertEqual(out.getvalue(), "")
+        self.assertIn("Invalid CLI syntax", err.getvalue())
 
     def test_help_uses_requested_stream_without_constructing_manager(self):
         for args in (["--help"], ["ask", "--help"], ["plan", "--help"], ["capabilities", "--help"]):

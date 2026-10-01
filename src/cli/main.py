@@ -39,6 +39,7 @@ def main(argv=None, *, manager=None, stdout=None, stderr=None):
     stderr = sys.stderr if stderr is None else stderr
     parser = CLIParser(prog="python -m src.cli", allow_abbrev=False, output=stdout)
     parser.add_argument("--json", action="store_true", help="Emit the complete structured response.")
+    parser.add_argument("--full", action="store_true", help="Emit expanded human evidence.")
     commands = parser.add_subparsers(dest="command", required=True)
     catalog = commands.add_parser("capabilities", help="List capability availability.", allow_abbrev=False, output=stdout)
     preview = commands.add_parser("plan", help="Preview routing without execution.", allow_abbrev=False, output=stdout)
@@ -48,15 +49,20 @@ def main(argv=None, *, manager=None, stdout=None, stderr=None):
     for command in (catalog, preview, ask):
         command.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
                              help="Emit the complete structured response.")
+        command.add_argument("--full", action="store_true", default=argparse.SUPPRESS,
+                             help="Emit expanded human evidence.")
     try:
         args = parser.parse_args(argv)
+        if args.json and args.full:
+            raise CLIUsageError()
         manager = FinancialManagerAgent() if manager is None else manager
         if args.command == "capabilities":
             result, render = manager.list_capabilities(), capabilities
         elif args.command == "plan":
             result, render = manager.plan(args.question), plan
         else:
-            result, render = manager.ask(args.question), answer
+            result = manager.ask(args.question)
+            render = lambda value: answer(value, full=args.full)
         text = details(result) if args.json else terminal_text(render(result))
         stdout.write(text + "\n")
         stdout.flush()

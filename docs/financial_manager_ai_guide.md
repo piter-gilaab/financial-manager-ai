@@ -418,10 +418,12 @@ The standard-library CLI parses command syntax and calls the manager unchanged:
 `capabilities` → listing, `plan` → preview, `ask` → orchestration. It has no SQL,
 financial logic or second router. Quote the full question as one shell argument.
 
-Human output contains labeled statuses/explanations and full indented evidence.
-`--json` returns the complete application object; exact Decimal values, if present,
-become strings without float conversion. Neither mode truncates evidence. Terminal
-controls are escaped for human display without mutating source objects.
+Default human output contains labeled statuses/explanations and first-10 previews
+of large evidence collections with explicit returned/total/omitted counts.
+`--full` provides expanded human evidence. `--json` returns the complete application
+object; exact Decimal values, if present, become strings without float conversion.
+Preview selection and warning deduplication are display-only. Terminal controls
+are escaped for human display without mutating source objects.
 
 Exit codes: **0** for help or a delivered structured outcome (including blocked,
 clarification, unsupported and no-data), **2** for invalid command syntax, **1** for
@@ -543,7 +545,8 @@ Limited history and unsupported targets block forecasting; absent documents bloc
 
 Language is bounded English, not arbitrary financial conversation. Screening uses
 fixed measures/peers, and automatic screening accepts only supported unfiltered
-targets; advanced approved parameters use Python interfaces. Output can be large.
+targets; advanced approved parameters use Python interfaces. Full human and JSON
+output can be large; concise mode is a fixed preview rather than pagination.
 There is no authentication/RBAC, web/API, deployment, external model/FX, conversational
 memory or general production security guarantee. Tests cover the supplied local
 snapshot/runtime, not every platform, concurrent workload or financial interpretation.
