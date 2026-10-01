@@ -19,6 +19,12 @@ currency conversion is not implemented.
   [validation record](docs/step29_validation.md)
 - [Conversation state contract — Step 30](docs/conversation_state_contract.md) and
   [validation record](docs/step30_validation.md)
+- [Clarification continuation — Step 31](docs/clarification_continuation.md) and
+  [validation record](docs/step31_validation.md)
+- [Evidence-reference follow-ups — Step 32](docs/evidence_reference_followups.md)
+  and [validation record](docs/step32_validation.md)
+- [Bounded conversational UX — Step 33](docs/conversational_ux_validation.md) and
+  [validation record](docs/step33_validation.md)
 - [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
 - [Documentation / architecture review — Step 22](docs/step22_validation.md)
 - [Financial Core usage and architecture](docs/financial_core.md)
@@ -86,3 +92,12 @@ Omit both format flags for concise human output. Use `--full` for expanded human
 evidence or `--json` for the complete exact structured response. The CLI preserves
 UNKNOWN currency and warnings; unavailable or ambiguous requests report the
 existing blocker/clarification. See the workflow guide for syntax and limits.
+
+Phase 10 adds `src.manager.FinancialManagerSession`, a local in-memory Python API
+for explicit `new_request`, `answer`, `follow_up`, `cancel`, `reset` and `status`
+operations. It continues only the two approved clarification types and can
+re-resolve session-issued anomaly-candidate references through fresh authoritative
+execution. State expires after 30 minutes of inactivity or four hours absolute,
+is never persisted, and cannot unlock Forecasting or Document Retrieval. The CLI
+remains one-shot; no chat REPL, provider, network or full conversation history was
+added.

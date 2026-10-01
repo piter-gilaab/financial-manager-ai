@@ -429,8 +429,10 @@ Exit codes: **0** for help or a delivered structured outcome (including blocked,
 clarification, unsupported and no-data), **2** for invalid command syntax, **1** for
 cancellation or unexpected invocation/output failure. Automation must inspect JSON
 statuses; exit 0 does not imply financial execution. Error diagnostics use stderr,
-including in JSON mode. There is no chat loop, memory, session store or pagination.
-See [CLI details](cli_workflow.md) and runnable commands in section 21.
+including in JSON mode. The CLI has no chat loop or pagination. Phase 10 provides
+a separate bounded process-memory Python session API; it is not a persistent CLI
+session store. See [CLI details](cli_workflow.md) and runnable commands in section
+21.
 
 ## 16. End-to-end request examples
 
@@ -470,7 +472,21 @@ There is insufficient purpose to choose summary versus screening. Top-level
 clarification requests the measure and purpose; no service executes. Separately,
 “How many records are there?” selects analysis but Step 13 asks which dataset.
 Submit a complete clarified question, such as “Receiver General record count”;
-there is no persistent conversation state to remember an earlier answer.
+alternatively, the Phase 10 Python session can accept the approved closed answer
+and reconstruct that complete request through fresh routing. The CLI remains
+one-shot and remembers no earlier answer.
+
+### F. Bounded Python-session continuation
+
+`FinancialManagerSession` exposes explicit `new_request`, `answer`, `follow_up`,
+`cancel`, `reset` and `status` operations. It retains only one typed contextual
+descriptor, expires after 30 minutes inactive or four hours absolute, and never
+stores full chat history. Supported clarification reconstruction is limited to
+top-level analysis/screening choice and canonical record-count dataset choice.
+Supported evidence follow-up is limited to session-issued anomaly-candidate
+handles and always performs fresh routing, registry validation and deterministic
+service execution before returning structured detail. See the
+[Phase 10 validation](conversational_ux_validation.md).
 
 ## 17. Deterministic versus agent responsibilities
 
@@ -484,6 +500,7 @@ there is no persistent conversation state to remember an earlier answer.
 | Analysis question → approved contract | Deterministic Financial Analysis grounding/provider |
 | Execution order and result wrapping | Deterministic manager/orchestration |
 | Explanation and presentation | Templates and CLI, with no financial recalculation |
+| Bounded turn context | Local Python session; contextual metadata only, followed by fresh routing/execution |
 
 “Agent responsibility” describes interpretation and coordination, not a claim
 that an LLM currently drives it. All default behavior is local and deterministic
@@ -493,8 +510,10 @@ auditable and independently testable when language interpretation changes.
 
 ## 18. Testing strategy
 
-The verified regression baseline is **291 passed, 0 failed, 0 errors and 0 skipped**.
-The run and review evidence is recorded in [Step 22 validation](step22_validation.md).
+The verified regression baseline is **356 passed, 0 failed, 0 errors and 0
+skipped**. The current full run and Phase 10 review evidence are recorded in
+[Step 33 validation](step33_validation.md); the original V1 review is in
+[Step 22 validation](step22_validation.md).
 
 | Test layer | What it protects |
 |---|---|
@@ -506,6 +525,7 @@ The run and review evidence is recorded in [Step 22 validation](step22_validatio
 | Security/privacy (18) | Allowlisting, data-only messages, provider/error and evidence boundaries |
 | CLI (25) | Presentation, safe errors, exact JSON and delegation |
 | Acceptance (19) | Real CLI subprocesses through approved data/services to final output |
+| Bounded conversation (40) | Clarification/session lifecycle, evidence references, expiry, isolation and fail-closed state |
 
 Counts are unittest methods, not expanded subcases. Acceptance guards network and
 process boundaries, forbids database connections where no query should occur,
@@ -543,12 +563,15 @@ alignment. CF lacks company identity and verified statement/cash semantics; its
 placeholders, quantity meaning and uneven category histories remain visible.
 Limited history and unsupported targets block forecasting; absent documents block RAG.
 
-Language is bounded English, not arbitrary financial conversation. Screening uses
+Language is bounded English, not arbitrary financial conversation. Phase 10 state
+supports only two clarification types and explicit anomaly-candidate handles via a
+Python API; it adds no implicit pronoun resolution, general memory or CLI chat.
+Screening uses
 fixed measures/peers, and automatic screening accepts only supported unfiltered
 targets; advanced approved parameters use Python interfaces. Full human and JSON
 output can be large; concise mode is a fixed preview rather than pagination.
-There is no authentication/RBAC, web/API, deployment, external model/FX, conversational
-memory or general production security guarantee. Tests cover the supplied local
+There is no authentication/RBAC, web/API, deployment, external model/FX, persistent
+or general-purpose conversational memory, or general production security guarantee. Tests cover the supplied local
 snapshot/runtime, not every platform, concurrent workload or financial interpretation.
 
 The repository has no dependency lock/package installer, and required local data
