@@ -515,9 +515,10 @@ auditable and independently testable when language interpretation changes.
 
 ## 18. Testing strategy
 
-The verified regression baseline is **369 passed, 0 failed, 0 errors and 0
+The verified regression baseline is **374 passed, 0 failed, 0 errors and 0
 skipped**. The current full run and Phase 11 review evidence are recorded in
-[Step 35 validation](step35_validation.md); the Phase 10 review is in
+[Step 36 validation](step36_validation.md); the implementation checkpoint is in
+[Step 35 validation](step35_validation.md), the Phase 10 review is in
 [Step 33 validation](step33_validation.md), and the original V1 review is in
 [Step 22 validation](step22_validation.md).
 
@@ -531,6 +532,7 @@ skipped**. The current full run and Phase 11 review evidence are recorded in
 | Security/privacy (18) | Allowlisting, data-only messages, provider/error and evidence boundaries |
 | CLI (25) | Presentation, safe errors, exact JSON and delegation |
 | Conversational CLI (13) | Explicit operation mapping, lifecycle, references, expiry and safe interactive exits |
+| Conversational CLI validation (5) | Real subprocess workflow, boundary safety, integrity and cross-process lifecycle |
 | Acceptance (19) | Real CLI subprocesses through approved data/services to final output |
 | Bounded conversation (40) | Clarification/session lifecycle, evidence references, expiry, isolation and fail-closed state |
 
