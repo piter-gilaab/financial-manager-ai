@@ -11,6 +11,12 @@ currency conversion is not implemented.
 - [Fresh-clone reproducibility — Step 24](docs/fresh_clone_reproducibility.md)
 - [V1 user evaluation — Step 25](docs/user_evaluation.md)
 - [Next capability readiness — Step 26](docs/next_capability_readiness.md)
+- [Concise CLI presentation — Step 27](docs/concise_cli_presentation.md) and
+  [validation](docs/step27_validation.md)
+- [Presentation validation — Step 28](docs/presentation_validation.md) and
+  [validation record](docs/step28_validation.md)
+- [Conversational UX readiness — Step 29](docs/conversational_ux_readiness.md) and
+  [validation record](docs/step29_validation.md)
 - [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
 - [Documentation / architecture review — Step 22](docs/step22_validation.md)
 - [Financial Core usage and architecture](docs/financial_core.md)
@@ -71,8 +77,10 @@ Phase 7 Step 20 adds a thin local CLI over that manager. From the repository roo
 .venv/bin/python -m src.cli capabilities
 .venv/bin/python -m src.cli plan "Find outliers in Profit"
 .venv/bin/python -m src.cli ask "What were total sales by country?" --json
+.venv/bin/python -m src.cli ask "Find unusual Profit values" --full
 ```
 
-Omit `--json` for readable output. The CLI preserves exact evidence, UNKNOWN
-currency and warnings; unavailable or ambiguous requests report the existing
-blocker/clarification. See the workflow guide for syntax, exit codes and limits.
+Omit both format flags for concise human output. Use `--full` for expanded human
+evidence or `--json` for the complete exact structured response. The CLI preserves
+UNKNOWN currency and warnings; unavailable or ambiguous requests report the
+existing blocker/clarification. See the workflow guide for syntax and limits.
