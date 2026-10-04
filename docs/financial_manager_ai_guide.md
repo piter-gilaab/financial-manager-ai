@@ -17,8 +17,11 @@ business fact.
 One Financial Manager composes deterministic data/financial services and
 interpretation/orchestration modules. Despite the project and class names,
 **the default V1 uses no LLM**: interpretation is bounded English grammar and
-explanation is templated. The provider seam permits future approved interpretation
-adapters; it does not give a model authority over calculations or evidence.
+explanation is templated. Phase 12 adds an *optional* local LLM **mediator** for
+the interactive chat (`chat --llm-model …`, see section 16). It interprets
+natural English/Portuguese and explains results, but it is never the financial
+authority: it only selects approved requests and writes prose that a
+deterministic guard checks against authoritative evidence.
 This is not a group of autonomous LLM agents, an accounting ledger application,
 a payment system or a company financial-statement platform.
 
@@ -69,6 +72,7 @@ analysis agent or reconstruct screening from an LLM explanation.
 | [`src/anomaly/`](../src/anomaly/) | Independently callable screening service and IQR baseline; start with `service.py` and `baseline.py` |
 | [`src/manager/`](../src/manager/) | Application facade, four-capability registry, top-level routing, orchestration and message-boundary checks |
 | [`src/cli/`](../src/cli/) | Argument parsing, module entry point and presentation only |
+| [`src/mediation/`](../src/mediation/) | Phase 12 optional LLM mediation: closed request catalog, intent/response validation, loopback provider, fact catalog and evidence-rendered presentation; start with `mediator.py` |
 | `tests/` | Unit, integration and real-subprocess acceptance validation |
 | `docs/`, `CONTEXT.md` | Detailed contracts/designs and historical validation; glossary contains domain vocabulary, not runtime configuration |
 
@@ -405,7 +409,13 @@ Step 19 protects the current local application boundaries, not a deployed servic
   Unexpected development exceptions may propagate in Python; the CLI emits fixed
   invocation/syntax/cancellation diagnostics rather than tracebacks/private text.
 
-No telemetry, network transport, credentials or external fallback is added.
+- The optional Phase 12 mediator gets no execution path. Its proposals are enum
+  keys validated against a closed schema. Its prose is displayed only after a
+  deterministic grounding guard. Its single transport is a loopback-only HTTP
+  adapter with proxies and redirects disabled. Every failure falls back to the
+  deterministic behavior.
+
+No telemetry, external network transport, credentials or external fallback is added.
 Trusted local Python configuration can still execute code; a LOCAL label is not
 proof of network isolation. Shell history, saved output and financial evidence
 remain sensitive. Authentication, RBAC, encryption-at-rest management, process
@@ -434,11 +444,65 @@ cancellation or unexpected invocation/output failure. Automation must inspect JS
 statuses; exit 0 does not imply financial execution. Error diagnostics use stderr,
 including in JSON mode. Chat exits cleanly on `/exit`, EOF or Ctrl+C and remains
 concise-only; it does not add pagination. Its Phase 10 session is process-memory
-only and is not a persistent CLI session store. See
+only and is not a persistent CLI session store. `chat --llm-model NAME
+[--llm-url LOOPBACK_URL] [--llm-timeout SECONDS]` enables the optional Phase 12
+mediator for plain text only. Slash commands stay deterministic, and a
+non-loopback URL or invalid timeout is a fixed exit-2 configuration error. See
 [the chat contract](conversational_cli_contract.md), [CLI details](cli_workflow.md)
-and runnable commands in section 21.
+and runnable commands in section 22.
 
-## 16. End-to-end request examples
+## 16. LLM conversational mediation (Phase 12)
+
+The optional mediator lets a user talk naturally while the deterministic system
+keeps every authority it had:
+
+```text
+USER
+  ↓
+LLM MEDIATION                      (local model; slash commands bypass it)
+  ↓
+VALIDATED STRUCTURED INTENT        (closed schema; catalog key, canonical choice or issued label)
+  ↓
+FINANCIAL MANAGER                  (FinancialManagerSession → FinancialManagerAgent → routing/registry)
+  ↓
+DETERMINISTIC FINANCIAL CAPABILITY (Financial Core / AnomalyService)
+  ↓
+AUTHORITATIVE EVIDENCE
+  ↓
+GROUNDED LLM RESPONSE              (fact catalog in, guarded prose out)
+  +
+STRUCTURED PRESENTATION            (tables/lists/notes rendered by code from evidence)
+  ↓
+USER
+```
+
+**The LLM is a mediator, not the financial authority.** It chooses one of 25
+code-owned canonical requests (or passes the user's own words to the
+deterministic router), maps a natural reply to a canonical pending choice, or
+names an issued evidence label (`A1`–`A10`). No model-authored string reaches
+routing, the session or the manager. It then receives a
+`GroundedResponsePacket` of numbered facts and writes at most 1,200 characters of
+prose. The prose is displayed only if every numeral matches a declared fact, with
+the same sign and a correct rounding, and if it names no currency, makes no
+fraud/certainty/probability, forecast, cash or document claim, and contains no
+internal identifier. The response prompt requires the packet language and concise,
+direct analyst communication; a conservative lexical guard rejects obvious
+English/pt-BR prose mismatches. Tables and lists are rendered by code directly
+from the evidence. Clarifications, blocked capabilities and refusals use
+code-owned localized templates.
+
+Any failure falls back to the Phase 11 deterministic behavior. This covers an
+unavailable or slow model, malformed or oversized output, a non-allowlisted
+proposal, an ungrounded response, and a provider that is not LOCAL. The provider
+is a loopback-only OpenAI-compatible HTTP adapter (standard library, no proxies,
+no redirects, bounded time and size, no retries, no credentials, no logging).
+Mediation state is one in-memory label map, validated against the session on every
+turn. It disappears on reset, cancel, expiry or a new request. See the
+[mediation contract](llm_mediation_contract.md), the
+[closed-catalog ADR](adr/0002-llm-como-mediador-com-catalogo-fechado.md) and the
+[validation](llm_mediation_validation.md).
+
+## 17. End-to-end request examples
 
 ### A. “What were total sales by country?”
 
@@ -493,7 +557,7 @@ service execution before returning structured detail. See the
 [Phase 10 validation](conversational_ux_validation.md). Phase 11 exposes these
 same operations through `python -m src.cli chat`; the CLI does not duplicate them.
 
-## 17. Deterministic versus agent responsibilities
+## 18. Deterministic versus agent responsibilities
 
 | Responsibility | Current owner and behavior |
 |---|---|
@@ -506,18 +570,21 @@ same operations through `python -m src.cli chat`; the CLI does not duplicate the
 | Execution order and result wrapping | Deterministic manager/orchestration |
 | Explanation and presentation | Templates and CLI, with no financial recalculation |
 | Bounded turn context | Local Python session; contextual metadata only, followed by fresh routing/execution |
+| Natural-language mediation (optional) | Local LLM proposes allowlisted intents and writes prose; deterministic validators, session and evidence decide everything |
+| Grounding of explanations | Deterministic fact catalog + response guard; tables/lists rendered by code from evidence |
 
 “Agent responsibility” describes interpretation and coordination, not a claim
-that an LLM currently drives it. All default behavior is local and deterministic
-for the same validated state/request. A future model may propose an intent only
-within an explicitly approved boundary. This separation makes financial evidence
+that an LLM drives it. All default behavior is local and deterministic for the
+same validated state/request. The Phase 12 mediator is opt-in and may only
+propose allowlisted intents and grounded prose within the boundary in section 16. This separation makes financial evidence
 auditable and independently testable when language interpretation changes.
 
-## 18. Testing strategy
+## 19. Testing strategy
 
-The verified regression baseline is **374 passed, 0 failed, 0 errors and 0
-skipped**. The current full run and Phase 11 review evidence are recorded in
-[Step 36 validation](step36_validation.md); the implementation checkpoint is in
+The verified regression baseline is **452 passed, 0 failed, 0 errors and 0
+skipped** after the Phase 12B language hardening
+([Step 42 validation](step42_validation.md)); the
+Phase 11 baseline of 374 is recorded in [Step 36 validation](step36_validation.md); the implementation checkpoint is in
 [Step 35 validation](step35_validation.md), the Phase 10 review is in
 [Step 33 validation](step33_validation.md), and the original V1 review is in
 [Step 22 validation](step22_validation.md).
@@ -535,6 +602,7 @@ skipped**. The current full run and Phase 11 review evidence are recorded in
 | Conversational CLI validation (5) | Real subprocess workflow, boundary safety, integrity and cross-process lifecycle |
 | Acceptance (19) | Real CLI subprocesses through approved data/services to final output |
 | Bounded conversation (40) | Clarification/session lifecycle, evidence references, expiry, isolation and fail-closed state |
+| LLM mediation (78) | Closed intent schema, loopback provider, input dispatch, fact catalog, grounding and language guards, evidence-rendered presentation, fallback and end-to-end scenarios A–R |
 
 Counts are unittest methods, not expanded subcases. Acceptance guards network and
 process boundaries, forbids database connections where no query should occur,
@@ -544,7 +612,7 @@ Unavailable capabilities are explicitly tested, not skipped. Regression testing
 keeps earlier promises intact while later layers are added; a passing integration
 test alone does not prove source semantics or statistical detection accuracy.
 
-## 19. Important architectural decisions
+## 20. Important architectural decisions
 
 | Decision | Rationale / consequence |
 |---|---|
@@ -559,12 +627,13 @@ test alone does not prove source semantics or statistical detection accuracy.
 | Local deterministic default | Existing workflows need no provider credentials, network or private-data transmission |
 | Evidence separate from explanation | Full results remain inspectable even when text is summarized or changed |
 | Two routing levels | Capability selection can evolve without duplicating 17 domain contracts |
+| LLM as mediator over a closed catalog | Natural language and natural prose without giving a model authority; a mistranslation can only select another approved request, which is shown to the user |
 
 These decisions are supported by code, contracts and the
 [single-manager ADR](adr/0001-financial-manager-com-ferramentas-especializadas.md).
 This guide records their rationale; it does not ratify new architecture proposals.
 
-## 20. Current limitations
+## 21. Current limitations
 
 Currency, acquisition provenance, economic comparability and source grain remain
 unresolved. RG has sparse dimensions, uncertain summary/detail overlap and fiscal
@@ -572,7 +641,12 @@ alignment. CF lacks company identity and verified statement/cash semantics; its
 placeholders, quantity meaning and uneven category histories remain visible.
 Limited history and unsupported targets block forecasting; absent documents block RAG.
 
-Language is bounded English, not arbitrary financial conversation. Conversation
+Without mediation, language is bounded English, not arbitrary financial
+conversation. With the optional local mediator, English and Portuguese
+paraphrases reach only the 25 catalog requests; filtered or period-specific
+analysis still needs the English grammar, and prose grounding verifies numerals,
+currency, terminology and capability claims but not every non-numeric
+association (the evidence-rendered table remains authoritative). Conversation
 state supports only two clarification types and explicit anomaly-candidate
 handles through the Python API or its thin interactive CLI adapter; it adds no
 implicit pronoun resolution, general memory or persistent chat. Screening uses
@@ -588,7 +662,7 @@ and environment files may not be tracked in Git. A fresh clone alone is not a
 documented complete installation. Preserve the approved asset bundle and recorded
 environment; do not rerun cleaning or replace the snapshot just to start the CLI.
 
-## 21. How to run the project
+## 22. How to run the project
 
 Run from the repository root using the supplied `.venv`, approved raw/processed
 artifacts, notebooks and SQLite snapshot. `sqlite3.Connection.deserialize` must
@@ -606,6 +680,8 @@ python -B -m src.cli ask "What were total sales by country?"
 python -B -m src.cli ask "What were total sales by country?" --json
 python -B -m src.cli ask "Forecast cash flow next month"
 python -B -m src.cli chat
+# Optional Phase 12 mediation with a locally hosted OpenAI-compatible model server:
+python -B -m src.cli chat --llm-model qwen2.5:7b-instruct --llm-url http://127.0.0.1:11434/v1/chat/completions
 
 # Full regression, including acceptance.
 python -B -m unittest discover -s tests -v
@@ -622,7 +698,7 @@ do not run the builder over the existing production destination. For a new machi
 runtime/environment and protected-artifact provisioning still need a separately
 reviewed reproducible setup procedure.
 
-## 22. How to study the project
+## 23. How to study the project
 
 1. **This guide and [glossary](../CONTEXT.md):** learn scope, layers and distinctions
    among accounting entries, sales, cash movements and uncertain denomination.
@@ -648,12 +724,16 @@ reviewed reproducible setup procedure.
     and initial assumptions from operational capabilities. Read notebooks last
     when investigating why a particular source or cleaning limitation exists.
 
-## 23. Evolution roadmap
+## 24. Evolution roadmap
 
 **Implemented V1:** validated data representation/SQLite, 17 descriptive contracts,
 quality/currency metadata and offline FX eligibility, bounded analysis interpretation,
 IQR screening, explicit/automatic manager delegation, message/privacy boundaries,
 CLI and end-to-end acceptance. No live LLM is needed.
+
+**Phase 12 (implemented, optional):** local LLM conversational mediation over the
+same session/manager, with grounded responses, evidence-rendered tables and a
+deterministic fallback.
 
 **Blocked pending evidence/data:** actual-cash forecasting and production financial
 document retrieval. Obtain authoritative representative sources and rerun readiness

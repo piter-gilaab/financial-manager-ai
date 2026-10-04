@@ -30,6 +30,12 @@ currency conversion is not implemented.
 - [Interactive CLI implementation — Step 35 validation](docs/step35_validation.md)
 - [Conversational CLI validation — Step 36](docs/conversational_cli_validation.md)
   and [validation record](docs/step36_validation.md)
+- [LLM mediation contract — Step 37](docs/llm_mediation_contract.md),
+  [validation](docs/llm_mediation_validation.md) and records for
+  [Step 37](docs/step37_validation.md), [Step 38](docs/step38_validation.md),
+  [Step 39](docs/step39_validation.md), [Step 40](docs/step40_validation.md) and
+  [Step 41](docs/step41_validation.md), plus
+  [Step 42 language and response-quality hardening](docs/step42_validation.md)
 - [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
 - [Documentation / architecture review — Step 22](docs/step22_validation.md)
 - [Financial Core usage and architecture](docs/financial_core.md)
@@ -116,3 +122,18 @@ Plain text always starts a new request. Use `/answer` for an approved pending
 clarification and `/follow` for a session-issued anomaly reference; `/help` lists
 the small command vocabulary. Chat is concise-only, process-memory-only and adds
 no provider, network, persistence, transcript or unrestricted conversation memory.
+
+Phase 12 adds optional natural-language mediation to that chat through a locally
+hosted OpenAI-compatible model:
+
+```sh
+.venv/bin/python -m src.cli chat --llm-model qwen2.5:7b-instruct \
+  --llm-url http://127.0.0.1:11434/v1/chat/completions
+```
+
+The model understands English and Portuguese and explains results. It is not the
+financial authority: it only selects approved requests, and its prose is shown
+only when a deterministic guard verifies it against the authoritative evidence.
+Tables come straight from that evidence. Only loopback endpoints are accepted, and
+any model failure falls back to the deterministic Phase 11 behavior. Without
+`--llm-model`, nothing changes.
