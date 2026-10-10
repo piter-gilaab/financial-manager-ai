@@ -16,6 +16,9 @@ Commands:
 /cancel
 /reset
 /exit"""
+MEDIATION_BANNER = ("LLM mediation is on (local model). It interprets plain text and explains results; "
+                    "financial values come only from deterministic evidence. Slash commands are unchanged.")
+MEDIATION_HELP = "Plain text is interpreted by the local LLM mediator; Portuguese and English are supported."
 CHAT_USAGE_HINTS = (
     "Use the one-shot ask command with --full or --json for complete evidence.",
 )
@@ -71,6 +74,21 @@ def _write_outcome(session, outcome, stdout):
                      "enter a complete new request.\n")
 
 
+def _write_turn(session, turn, stdout):
+    if turn.notice is not None:
+        stdout.write(turn.notice + "\n")
+    if turn.text is None:
+        if turn.replaced_pending:
+            stdout.write("Starting a new request; the pending clarification is replaced.\n")
+        _write_outcome(session, turn.outcome, stdout)
+        if turn.labels:
+            stdout.write("Natural follow-up labels for these references:\n")
+            for label, handle in turn.labels:
+                stdout.write(f"- {label} = {terminal_text(handle)}\n")
+    else:
+        stdout.write(terminal_text(turn.text) + "\n")
+
+
 def _answer_value(text):
     prefix = "/answer "
     if not text.startswith(prefix):
@@ -91,9 +109,11 @@ def _write_status(session, stdout):
     stdout.write("Session status:\n" + terminal_text(details(safe)) + "\n")
 
 
-def _run_chat_loop(session, *, stdin, stdout):
+def _run_chat_loop(session, *, mediator, stdin, stdout):
     stdin = sys.stdin if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
+    if mediator is not None:
+        stdout.write(MEDIATION_BANNER + "\n")
     while True:
         prompt_status = session.status()
         prompt = (CLARIFICATION_PROMPT
@@ -115,6 +135,8 @@ def _run_chat_loop(session, *, stdin, stdout):
             return 0
         if text == "/help":
             stdout.write(HELP_TEXT + "\n")
+            if mediator is not None:
+                stdout.write(MEDIATION_HELP + "\n")
             stdout.flush()
             continue
         if text == "/status":
@@ -147,6 +169,11 @@ def _run_chat_loop(session, *, stdin, stdout):
             stdout.write("Invalid chat command. Use /help.\n")
             stdout.flush()
             continue
+        if mediator is not None:
+            # Slash commands never reach this point, so they are never sent to the LLM.
+            _write_turn(session, mediator.handle(request_text), stdout)
+            stdout.flush()
+            continue
         current = session.status()
         if _pending_clarification(current) is not None:
             stdout.write("Starting a new request; the pending clarification is replaced.\n")
@@ -155,11 +182,11 @@ def _run_chat_loop(session, *, stdin, stdout):
         stdout.flush()
 
 
-def run_chat(session, *, stdin=None, stdout=None):
+def run_chat(session, *, mediator=None, stdin=None, stdout=None):
     """Run one process-local chat until explicit exit, interrupt or end of input."""
     stdout = sys.stdout if stdout is None else stdout
     try:
-        return _run_chat_loop(session, stdin=stdin, stdout=stdout)
+        return _run_chat_loop(session, mediator=mediator, stdin=stdin, stdout=stdout)
     except KeyboardInterrupt:
         stdout.write("Chat ended.\n")
         stdout.flush()
