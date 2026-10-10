@@ -18,12 +18,41 @@ def coverage(candidates, used, reasons):
             "exclusion_reasons": counts, "percentage": percentage(used, candidates)}
 
 
+def unfiltered_record_accounting(population, exclusion_reasons):
+    reasons = dict(sorted(Counter(exclusion_reasons).items()))
+    excluded = sum(reasons.values())
+    return {
+        "population": population,
+        "filtered_out": 0,
+        "filter_unavailable": 0,
+        "candidates": population,
+        "used": population - excluded,
+        "excluded": excluded,
+        "exclusion_reasons": reasons,
+        "filter_unavailable_reasons": {},
+    }
+
+
+def dimension_coverage_counts(candidates, unavailable_by_status, policy):
+    unavailable = sum(unavailable_by_status.values())
+    available = candidates - unavailable
+    return {
+        "candidates": candidates,
+        "available": available,
+        "unavailable": unavailable,
+        "unavailable_by_status": dict(sorted(unavailable_by_status.items())),
+        "percentage": percentage(available, candidates),
+        "policy": policy,
+    }
+
+
 def dimension_coverage(rows, field, column, policy):
     unavailable = Counter(row[column + "_status"] for row in rows if row[column] is None)
-    available = len(rows) - sum(unavailable.values())
-    return {"candidates": len(rows), "available": available, "unavailable": len(rows) - available,
-            "unavailable_by_status": dict(sorted(unavailable.items())),
-            "percentage": percentage(available, len(rows)), "policy": policy}
+    return dimension_coverage_counts(len(rows), unavailable, policy)
+
+
+def ordered_group_keys(keys):
+    return sorted(keys, key=lambda key: (key is None, key or ""))
 
 
 def select_rows(rows, fields, dataset):

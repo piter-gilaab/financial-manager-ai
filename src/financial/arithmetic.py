@@ -12,6 +12,13 @@ def decimal(token):
     return Decimal(token)
 
 
+def canonical_decimal(token):
+    """Parse an exact canonical mapping value without legacy scale constraints."""
+    if not isinstance(token, str) or re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?", token) is None:
+        blocker("invalid_decimal", "A canonical amount is not exact decimal TEXT.")
+    return Decimal(token)
+
+
 def exact_context():
     # Independent of the process-global Decimal context, including traps/rounding.
     ctx = Context(prec=60)
@@ -19,17 +26,25 @@ def exact_context():
     return localcontext(ctx)
 
 
-def exact_sum(values):
-    if not values:
-        return None
+def exact_count_sum(values):
+    iterator = iter(values)
     try:
         with exact_context():
-            total = +values[0]  # Check precision even for a single operand.
-            for value in values[1:]:
+            try:
+                total = +next(iterator)  # Check precision even for a single operand.
+            except StopIteration:
+                return 0, None
+            count = 1
+            for value in iterator:
                 total += value
-            return total
+                count += 1
+            return count, total
     except DecimalException:
         blocker("exact_arithmetic_limit", "Exact arithmetic exceeded precision 60; no subtotal returned.")
+
+
+def exact_sum(values):
+    return exact_count_sum(values)[1]
 
 
 def rounded_ratio(numerator, denominator):
@@ -48,12 +63,12 @@ def percentage(used, candidates):
     return rounded_ratio(100 * used, candidates)
 
 
-def statistics(tokens, requested):
+def _statistics(tokens, requested, parser):
     """Tokens arrive in source-row order; stable numeric sorting resolves ties."""
-    values = [decimal(token) for token in tokens]
+    values = [parser(token) for token in tokens]
     result = {}
     total = exact_sum(values) if "sum" in requested or "mean" in requested else None
-    ordered = sorted(zip(values, tokens), key=lambda pair: pair[0])
+    ordered = sorted(zip(values, tokens), key=lambda pair: pair[0]) if "median" in requested else None
     for operation in requested:
         if operation == "count":
             result[operation] = len(tokens)
@@ -81,3 +96,19 @@ def statistics(tokens, requested):
         else:
             raise ValueError("Unvalidated statistic")
     return result
+
+
+def statistics(tokens, requested):
+    """Calculate over the strict legacy snapshot decimal representation."""
+    return _statistics(tokens, requested, decimal)
+
+
+def canonical_statistics(tokens, requested):
+    """Calculate over exact values emitted by the approved canonical mapper."""
+    return _statistics(tokens, requested, canonical_decimal)
+
+
+def canonical_count_sum(tokens):
+    """Count and exactly sum canonical tokens in one pass."""
+    count, total = exact_count_sum(canonical_decimal(token) for token in tokens)
+    return {"count": count, "sum": None if total is None else format(total, "f")}

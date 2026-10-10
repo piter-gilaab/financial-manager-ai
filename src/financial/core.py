@@ -10,7 +10,15 @@ from .contracts import CONTRACTS, FIELDS
 from .currency import query_currency
 from .filters import normalize
 from .models import ContractError, arithmetic_metadata, envelope
-from .quality import assess, coverage, dimension_coverage, observed_period, result_status, select_rows
+from .quality import (
+    assess,
+    coverage,
+    dimension_coverage,
+    observed_period,
+    ordered_group_keys,
+    result_status,
+    select_rows,
+)
 from .snapshot import ApprovedSnapshot
 
 
@@ -72,7 +80,7 @@ def calculate(candidates, request, records):
                 key = key[:{"day": 10, "month": 7, "year": 4}[request.options["granularity"]]]
             groups[key].append(row)
         output = []
-        for key in sorted(groups, key=lambda key: (key is None, key or "")):
+        for key in ordered_group_keys(groups):
             group_rows = groups[key]
             item = {"key": {"value": key, "kind": "unavailable" if key is None else "source_value"},
                     "record_count": len(group_rows),
