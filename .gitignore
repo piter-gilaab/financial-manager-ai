@@ -1,10 +1,12 @@
 # AI development tooling
 .agents
+AGENTS
 skills-lock.json
 
 # Data
 data/raw/
 data/processed/
+data/onboarding/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
