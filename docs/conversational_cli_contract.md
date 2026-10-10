@@ -225,3 +225,16 @@ Unsupported:
 - arbitrary tools, SQL, shell execution or database access; and
 - new natural-language routing rules for chat.
 
+## Phase 12 addendum: optional LLM mediation
+
+The [LLM mediation contract](llm_mediation_contract.md) adds one opt-in mode,
+`chat --llm-model …`. In that mode only, a plain-text turn is interpreted by a
+local model. The validated proposal may become `session.new_request` with a
+code-owned canonical request or the user's own words, `session.answer` with an
+exact pending canonical choice, or `session.follow_up` with a session-issued
+handle named by an `A1`–`A10` label. Ambiguous or unreconstructable input
+receives a code-owned clarification and no session operation. Every slash
+command, the command vocabulary, `/status` redaction, lifecycle limits, exit
+behavior and the deterministic Phase 11 presentation (used as the fallback)
+are unchanged. Without `--llm-model`, every rule above applies exactly as
+written.
