@@ -109,6 +109,26 @@ redacted projection; complete evidence and handles are not exposed through
 status. Host terminal, shell, redirected-output, swap and process-inspection
 behavior remain outside the application boundary.
 
+## Phase 12 LLM mediation boundary
+
+The optional mediator (see the [contract](llm_mediation_contract.md)) adds two
+crossings to the table above:
+
+| Boundary | Allowed | Not allowed |
+|---|---|---|
+| Mediator → local model | Interpretation: the user's text, catalog IDs/descriptions, canonical pending choices, issued labels. Response: a bounded fact catalog (exact values, coverage, warnings) built by code | Database handles, raw envelopes, record IDs, hashes, paths, raw source tokens, session IDs, handles, prior turns, credentials |
+| Local model → application | A closed-schema intent of enum values; a NaturalResponse whose numerals, currency, terminology and capability claims pass the grounding guard | Free text reaching routing/session/manager, tool or function names, SQL/shell/imports, unvalidated prose, provider error text |
+
+Only `ProviderLocation.LOCAL` providers are called (identity check before
+invocation). The HTTP adapter accepts loopback URLs only, ignores proxy
+environment variables, refuses redirects, enforces per-operation and whole-call
+deadlines and 64 KiB request/response caps, makes one attempt, sends no
+credentials and replaces all errors with one fixed message. PRIVATE/EXTERNAL
+remain disabled with no implementation. Prompts, responses and packets are not
+logged or persisted; the only mediation state is an in-memory label map that is
+invalidated by any session change. A loopback model server is trusted local
+configuration: what that process does with the data is a host responsibility.
+
 ## Financial evidence and explanations
 
 Specialized results remain authoritative, copied completely into existing manager
@@ -155,6 +175,52 @@ values may be echoed by existing contracts. This is not new internal disclosure;
 the result itself remains sensitive. There is no blanket regex redactor or DLP
 claim. Trusted adapters must return controlled error fields rather than raw
 exception bodies, and callers must protect entire results before sharing them.
+
+## Phase 13 onboarding boundary
+
+Dynamic Data Onboarding introduces a local write boundary under the configured,
+Git-ignored onboarding root. The user's original is read as a regular non-symlink
+file and never modified. Accepted exact bytes, bounded structural profiles,
+validated semantic proposals, explicit decisions and registry projections stay
+local. Public status/CLI projections expose a basename and fingerprint, never an
+absolute source path.
+
+CSV and XLSX content is untrusted data. Ingestion enforces byte/row/column/cell
+and archive bounds; rejects devices, symlinks, malformed tables, unsafe ZIP
+paths/expansion, formulas, macros and external workbook links; and never executes
+SQL, shell, imports or spreadsheet expressions. Missing values, duplicates,
+outliers and ambiguous dates are findings—not silently removed, imputed or
+reinterpreted.
+
+An optional semantic provider must be `LOCAL` and receives only a bounded profile
+packet. Likely-sensitive examples are suppressed. Dataset content is JSON data,
+not prompt instructions. Strict output validation accepts only
+`SUGGESTED`/`UNKNOWN` allowlisted roles; it cannot confirm meaning, choose
+capabilities or emit executable plans. Raw provider output and chat history are
+not persisted. User decisions, deterministic readiness and callable validated
+adapters remain separate authorities.
+
+Step 54 readiness is recalculated per dataset and operation through the closed
+query binder and static adapter validation. `AVAILABLE_WITH_LIMITATIONS` is not a
+global switch and cannot be supplied by registry, source or model text. The
+explicit Manager entry accepts only the typed request with an exact `dataset_id`,
+closed operation and bounded parameter; it adds no SQL, shell, dynamic import,
+request-derived `getattr` or fuzzy dataset lookup. Current source/schema or
+artifact integrity failure yields a path-free blocked report and execution still
+revalidates through the adapter. UNKNOWN currency is disclosed, never inferred.
+
+Step 55 validates this boundary through real persisted synthetic artifacts and
+the typed Manager entry point. Traversal-shaped dataset IDs, import-shaped
+operations, SQL-shaped parameters/values, shell-shaped cells and instruction-
+shaped headers remain invalid or inert data. The acceptance run also verifies
+revocation after source/schema changes, recovery only after restored approved
+state, path-free controlled failures and the absence of network/provider
+requirements. See [the Phase 14 acceptance matrix](dynamic_execution_validation.md).
+
+The local store is not encryption, DLP, malware scanning, authentication or a
+multi-user concurrency control. Host filesystem permissions, backups, disk/swap,
+terminal history and the behavior of a configured local model process remain
+deployment responsibilities.
 
 ## Unavailable capabilities and non-goals
 

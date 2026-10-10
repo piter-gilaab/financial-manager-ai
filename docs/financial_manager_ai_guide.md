@@ -73,6 +73,8 @@ analysis agent or reconstruct screening from an LLM explanation.
 | [`src/manager/`](../src/manager/) | Application facade, four-capability registry, top-level routing, orchestration and message-boundary checks |
 | [`src/cli/`](../src/cli/) | Argument parsing, module entry point and presentation only |
 | [`src/mediation/`](../src/mediation/) | Phase 12 optional LLM mediation: closed request catalog, intent/response validation, loopback provider, fact catalog and evidence-rendered presentation; start with `mediator.py` |
+| [`src/onboarding/`](../src/onboarding/) | Phase 13 local file ingestion, deterministic profiling, closed semantic suggestions/decisions, canonical mapping, registry and capability readiness; start with `manager.py` |
+| [`src/execution/`](../src/execution/) | Static execution adapters and deterministic query binding over approved onboarding artifacts; all nine fixed `SALES_RECORD` operations feed operation-specific dataset readiness; start with `binding.py` and `sales_record.py` |
 | `tests/` | Unit, integration and real-subprocess acceptance validation |
 | `docs/`, `CONTEXT.md` | Detailed contracts/designs and historical validation; glossary contains domain vocabulary, not runtime configuration |
 
@@ -236,6 +238,68 @@ provider is empty by default. UNKNOWN/INFERRED originals are refused before look
 even RATE_AVAILABLE produces no converted amount. Pair/date alone cross the FX
 provider seam, never transaction amounts. No network provider or conversion exists.
 See [Financial Core](financial_core.md) for arithmetic and quality details.
+
+### Onboarded SALES_RECORD execution and query binding
+
+Phase 14 Steps 51–52 introduce the first translation seam from an approved
+Phase 13 dataset into Financial Core calculations. The static `SALES_RECORD`
+adapter supports only record count, sales count/sum and sales by confirmed
+country. Each operation resolves confirmed semantic roles rather than literal
+source headers, so explicitly approved `Revenue`/`Nation` columns behave like
+`SALES`/`COUNTRY` without changing their source values.
+
+The adapter revalidates registry, workflow, profile, mapping and source
+fingerprint/schema identities, then constructs an operation-scoped canonical
+view. `src.financial.sales_records` owns arithmetic, coverage and statuses and
+reuses the same precision-60 exact arithmetic/coverage rules as the legacy Core.
+UNKNOWN currency, missing-value exclusions, source labels and per-record
+lineage remain visible. See the [adapter contract](execution_adapter_contract.md)
+and [Step 52 validation](step52_validation.md).
+
+This adapter seam does not change the 17 legacy contracts or conversational
+catalogs.
+
+Phase 15 Steps 56–58 add six directly bindable operations: Sales by confirmed transaction-date month/year,
+Segment and Product; supplied Profit total/sign summary; ungrouped monetary
+Discount statistics/coverage; and exact Units Sold quantity summary. The same
+adapter translates confirmed roles and `src.financial.sales_records` owns the
+shared deterministic grouping/summary calculations. Missing values and bounded
+per-measure parse failures are disclosed, Profit is never derived, Discount is
+never inferred as a rate, and Units Sold has no currency. Step 59 expands
+capability discovery and CLI readiness to that complete fixed nine-operation
+catalog while retaining operation-specific blockers.
+
+At the Step 53 baseline, `DynamicQueryBinder` was added in front of this seam
+with the original three operation keys and the optional `BUCKET`/`EXCLUDE`
+country policy. Steps 56–58 extend that same closed catalog with the six
+operations and bounded period/dimension parameters described above; Step 59
+projects that authoritative catalog through deterministic readiness. The
+binder resolves only an exact registered dataset ID, reads its approved
+canonical domain, validates operation-specific confirmed roles and constructs a
+typed adapter request. Binding reads registry metadata only; explicit
+`execute()` delegates unchanged to the adapter, which repeats authoritative
+artifact/source validation before Financial Core calculation. The binder adds no
+filters, source-column selection, natural-language targeting or implementation
+dispatch from request data. See the [binding contract](dynamic_query_binding_contract.md)
+and [Step 53 validation](step53_validation.md).
+
+Step 54 extends the Phase 13 readiness report rather than adding a second
+capability registry. For each exact dataset it binds and adapter-validates the
+three candidate operations. At least one passing operation produces
+`AVAILABLE_WITH_LIMITATIONS`; missing optional COUNTRY semantics block only
+`SALES_BY_COUNTRY`. Current source/schema/artifact failure revokes the live
+projection. Currency remains approved `CONFIRMED` or explicit `UNKNOWN`.
+
+`FinancialManagerAgent.execute_dataset_request(DynamicQueryRequest)` is the
+narrow activation surface. It delegates to binder → adapter → Core and preserves
+the evidence unchanged. Natural-language `ask`/`plan`, mediation and dataset
+selection remain unchanged, so no filename, recency or fuzzy request can select
+this path. The existing `dataset capabilities` CLI shows domain, currency and
+operation readiness; Step 55 validated the typed Manager path and deliberately
+added no execution CLI. See the
+[activation contract](dynamic_capability_activation_contract.md) and
+[Step 54 validation](step54_validation.md), followed by the complete
+[Phase 14 execution validation](dynamic_execution_validation.md).
 
 ## 8. Financial Analysis Agent
 
@@ -581,10 +645,17 @@ auditable and independently testable when language interpretation changes.
 
 ## 19. Testing strategy
 
-The verified regression baseline is **452 passed, 0 failed, 0 errors and 0
-skipped** after the Phase 12B language hardening
-([Step 42 validation](step42_validation.md)); the
-Phase 11 baseline of 374 is recorded in [Step 36 validation](step36_validation.md); the implementation checkpoint is in
+The verified Phase 15 regression is **615 passed, 0 failed, 0 errors and 0
+skipped** after Steps 59–60 readiness expansion and end-to-end validation. The
+pre-Step-59 baseline was 599 after Steps 56–58, the Phase 14 Step 55 baseline
+was 573, and the pre-Step-55 baseline was 566 after Step 54
+capability activation, and the pre-Step-54 baseline was 551
+after the Phase 14 Step 53 dynamic query binder
+([Step 53 validation](step53_validation.md)). The Steps 51–52 baseline of 534 is
+recorded in [Step 52 validation](step52_validation.md), the Phase 13 baseline of
+510 in [Step 50 validation](step50_validation.md), the Phase 12B baseline
+of 452 in [Step 42 validation](step42_validation.md), and the Phase 11 baseline
+of 374 in [Step 36 validation](step36_validation.md). The implementation checkpoint is in
 [Step 35 validation](step35_validation.md), the Phase 10 review is in
 [Step 33 validation](step33_validation.md), and the original V1 review is in
 [Step 22 validation](step22_validation.md).
@@ -603,6 +674,11 @@ Phase 11 baseline of 374 is recorded in [Step 36 validation](step36_validation.m
 | Acceptance (19) | Real CLI subprocesses through approved data/services to final output |
 | Bounded conversation (40) | Clarification/session lifecycle, evidence references, expiry, isolation and fail-closed state |
 | LLM mediation (78) | Closed intent schema, loopback provider, input dispatch, fact catalog, grounding and language guards, evidence-rendered presentation, fallback and end-to-end scenarios A–R |
+| Dynamic data onboarding (58) | Safe ingestion, profiling, confirmed semantics, immutable registry, readiness, lineage and reproducibility |
+| Execution adapter (24) | Closed registration/operations, Phase 13 artifact validation, exact SALES_RECORD evidence, coverage, currency, lineage and inert malicious data |
+| Dynamic query binding (17) | Exact dataset/domain resolution, closed operation/parameter binding, cross-artifact identity, static adapter compatibility, direct execution and non-activation |
+| Dynamic capability activation (15) | Dataset-specific and operation-aware readiness, revocation, explicit Manager execution, CLI discovery and preserved legacy/blocker behavior |
+| Dynamic execution acceptance (7) | Persisted file-to-Manager execution, renamed fields, exact/missing values, currency, revocation/recovery, targeting/security and real dataset CLI discovery |
 
 Counts are unittest methods, not expanded subcases. Acceptance guards network and
 process boundaries, forbids database connections where no query should occur,
@@ -734,6 +810,41 @@ CLI and end-to-end acceptance. No live LLM is needed.
 **Phase 12 (implemented, optional):** local LLM conversational mediation over the
 same session/manager, with grounded responses, evidence-rendered tables and a
 deterministic fallback.
+
+**Phase 13 (implemented with execution limitations):** bounded local CSV and
+formula-free XLSX onboarding, immutable source preservation, deterministic
+profiles, closed semantic suggestions, explicit user decisions, versioned
+domain-specific mappings/registry and deterministic capability readiness. New
+datasets cannot execute existing financial contracts in this phase because no
+generic Core or anomaly adapter was added; semantic approval therefore leads to
+a truthful `BLOCKED`/`BLOCKED_NOT_IMPLEMENTED` result rather than false readiness.
+See the [contract](dynamic_data_onboarding_contract.md) and
+[validation](dynamic_data_onboarding_validation.md).
+
+**Phase 14 Steps 51–53 (implemented):** a versioned, statically
+registered execution-adapter contract, the first deterministic `SALES_RECORD`
+adapter and an explicit dynamic query binder. Direct callers can bind, validate
+and execute record count, sales summary and sales by confirmed country with exact
+Core-owned arithmetic, coverage and source-row lineage.
+
+**Phase 14 Steps 54–55 (implemented and validated with explicit targeting):** eligible onboarded
+`SALES_RECORD` datasets now report dataset-specific
+`AVAILABLE_WITH_LIMITATIONS` with operation readiness, and an exact typed Manager
+request can execute through the existing binder/adapter/Core. The conversational
+path, fuzzy dataset discovery, new operations, dynamic Anomaly, Forecasting and
+RAG remain unavailable. Step 55 validates the persisted source-to-Manager path,
+partial readiness, revocation/recovery, exact evidence, CLI discovery, security
+boundaries and unchanged legacy datasets. Phase 14 is complete; see the
+[acceptance record](dynamic_execution_validation.md).
+
+**Phase 15 Steps 56–60 (implemented and validated):** the closed dynamic binder,
+existing adapter and Financial Core now directly support Sales by period/segment/
+product, Profit summary, monetary Discount analysis and Units Sold summary.
+Dataset capability discovery exposes all nine fixed operations with isolated
+operation-level readiness and controlled reasons. Step 60 validates the complete
+persisted onboarding-to-Manager path, renamed mappings, periods/grouping,
+measures, currency, revocation/recovery, integrity, security, lineage and
+unchanged legacy behavior. Phase 15 is complete; no Phase 16 work is included.
 
 **Blocked pending evidence/data:** actual-cash forecasting and production financial
 document retrieval. Obtain authoritative representative sources and rerun readiness

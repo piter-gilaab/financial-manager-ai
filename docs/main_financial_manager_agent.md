@@ -132,6 +132,25 @@ No correlation ID, request history, session store, clock, telemetry or additiona
 evidence-digest scheme is introduced. Step 13's existing evidence digest is
 preserved inside its complete response.
 
+## Explicit dynamic dataset response version 1.1
+
+Phase 14 Step 54 adds only
+`FinancialManagerAgent.execute_dataset_request(DynamicQueryRequest)`. Its
+`DynamicManagerResponse` extends the version 1.0 envelope and changes
+`manager_version` to `1.1`. All version 1.0 fields retain their meanings:
+notably, `capability_status` remains the static Manager registry availability
+for Financial Analysis (`AVAILABLE`) and `delegated_result` remains the complete
+adapter/Core evidence.
+
+Version 1.1 adds one typed `dataset_capability` field with the exact target's
+`dataset_id`, approved canonical domain, currency state/code, dataset-scoped
+state, semantic/policy/execution readiness, reasons, limitations and
+operation-level readiness. This is where `AVAILABLE_WITH_LIMITATIONS` is
+reported; it never expands the version 1.0 global availability vocabulary.
+Malformed/unknown targets receive a controlled blocked projection. The new
+entry point accepts no natural-language or fuzzy dataset selection and does not
+alter `execute`, `plan`, `ask`, sessions or mediation.
+
 ### Status mapping
 
 | Delegated/manager outcome | `execution_status` |

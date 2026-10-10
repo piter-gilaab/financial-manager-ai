@@ -23,6 +23,11 @@ is required:
 .venv/bin/python -m src.cli ask "What does invoice 123 say?"
 .venv/bin/python -m src.cli ask "Check my financial data"
 .venv/bin/python -m src.cli chat
+.venv/bin/python -m src.cli dataset add company.csv
+.venv/bin/python -m src.cli dataset status ds_...
+.venv/bin/python -m src.cli dataset profile ds_...
+.venv/bin/python -m src.cli dataset mappings ds_...
+.venv/bin/python -m src.cli dataset capabilities ds_...
 .venv/bin/python -m src.cli --help
 ```
 
@@ -39,6 +44,7 @@ Each subcommand has `--help`.
 | `plan QUESTION` | `plan(question)` | Routing preview only; no capability execution |
 | `ask QUESTION` | `ask(question)` | Existing Step 18 orchestration and Step 17 delegation |
 | `chat` | `FinancialManagerSession` | Bounded process-local interactive session |
+| `dataset ...` | `OnboardingManager` | Local source preservation, profiling, semantic decisions, registry and readiness |
 
 Financial Analysis delegates through Step 13 and its approved Core tools.
 Screening delegates through Step 14. There is no CLI tool/capability registry,
@@ -73,6 +79,88 @@ and context projection. Inactivity expires after 30 minutes and absolute lifetim
 after four hours. Expired continuation operations are not retried; enter a new
 request or use `/reset`. Empty input is ignored. `/exit`, Ctrl+D/EOF and Ctrl+C
 end chat cleanly without a traceback.
+
+### Optional LLM mediation (Phase 12)
+
+```sh
+python -m src.cli chat --llm-model qwen2.5:7b-instruct \
+  --llm-url http://127.0.0.1:11434/v1/chat/completions --llm-timeout 30
+```
+
+`--llm-model` enables mediation. `--llm-url` defaults to
+`http://127.0.0.1:11434/v1/chat/completions` and must be loopback (`localhost`,
+`127.0.0.0/8` or `::1`). `--llm-timeout` defaults to 30 seconds, with a maximum
+of 120. Any other host, embedded credentials or an invalid timeout end with a
+fixed exit-2 message that does not echo the URL. The same local-only options are
+also accepted by `dataset add` for optional semantic suggestions. Without
+`--llm-model`, chat is exactly the Phase 11 workflow above and onboarding uses
+deterministic aliases plus manual decisions.
+
+With mediation, plain text is interpreted by the local model. It may start an
+approved request, answer the pending clarification with a canonical choice, or
+follow up an issued `A1`–`A10` label. Slash commands keep their deterministic
+meaning and are never sent to the model. When the model is unavailable or its
+proposal or prose fails validation, the turn shows a one-line notice and the
+standard Phase 11 output.
+
+```text
+Financial Manager > Como estão as vendas por país?
+Os Estados Unidos apresentam o maior valor de vendas na base, com 25,03 milhões, …
+
+País                      Vendas (total)  Registros
+---------------------------------------------------
+United States of America   25.029.830,18        140
+Canada                     24.887.654,89        140
+…
+Notas:
+- Moeda: UNKNOWN. A denominação da fonte não está estabelecida; …
+Pedido interpretado: “Total sales by country”. Evidência completa: python -m src.cli ask "Total sales by country" --full
+```
+
+See the [LLM mediation contract](llm_mediation_contract.md).
+
+## Dataset onboarding (Phase 13)
+
+```sh
+python -m src.cli dataset add company.csv [--sheet SHEET]
+python -m src.cli dataset status ds_...
+python -m src.cli dataset profile ds_...
+python -m src.cli dataset mappings ds_...
+python -m src.cli dataset confirm-domain ds_... SALES_RECORD --evidence "Data owner confirmation"
+python -m src.cli dataset confirm ds_... Sales SALES --evidence "Data owner confirmation"
+python -m src.cli dataset reject ds_... Sales --evidence "Incorrect suggestion"
+python -m src.cli dataset capabilities ds_...
+```
+
+`dataset add` accepts only bounded local CSV (UTF-8/UTF-8-SIG) and constrained
+XLSX. Multiple nonempty sheets require `--sheet`; formulas, macros, external
+links, malformed/oversized inputs, symlinks and unsupported formats are rejected.
+The original is never changed. Accepted bytes and typed versioned artifacts are
+written under the Git-ignored local onboarding root.
+
+`confirm` approves the proposed role when it matches or records a correction
+when another allowlisted role is supplied. Critical source-value meanings use a
+JSON `--value-map`, for example `'{"D":"DEBIT","C":"CREDIT"}'`. Currency
+codes require explicit ISO evidence; symbols do not establish denomination.
+Ambiguous date roles additionally require `--date-format DD/MM/YYYY` or
+`--date-format MM/DD/YYYY`; no locale convention is guessed.
+Every decision requires `--evidence`, creates a new mapping version, and can be
+revised. `--json` is available on every dataset leaf command.
+
+Capability output distinguishes semantic eligibility from actual execution.
+For an eligible `SALES_RECORD`, Step 59 reports Financial Analysis as
+`AVAILABLE_WITH_LIMITATIONS` and lists explicit states and controlled reasons for
+the fixed nine-operation catalog. Each operation passes the existing binder and
+adapter readiness probe independently, subject to the global approved-domain
+anchors. Optional COUNTRY, SEGMENT, PRODUCT, PROFIT, DISCOUNT and UNITS_SOLD
+semantics affect only their corresponding operations. Canonical domain and
+approved currency state remain visible. Dynamic Anomaly Detection, Forecasting
+and Document Retrieval retain their blockers.
+
+Step 54 does not add `dataset analyze`. Explicit execution is currently the typed
+Python method `FinancialManagerAgent.execute_dataset_request`; Step 55 validates
+that path but deliberately adds no execution command. Natural-language and fuzzy
+dataset selection remain unavailable.
 
 ## Output and application outcomes
 
@@ -122,13 +210,16 @@ guarantee a complete JSON document.
 
 ## Privacy and limits
 
-The CLI adds no provider, network call, credential, telemetry, data write or
-dependency. Step 19's controlled errors and local-only provider policy remain
-authoritative. Questions/results can themselves be sensitive: protect terminal
+The analysis/chat CLI adds no data write. Dataset onboarding deliberately writes
+exact source bytes and typed manifests to its configured local, Git-ignored root;
+it adds no telemetry, credential, external provider or dependency. Optional
+semantic assistance remains loopback-only. Step 19's controlled errors and
+local-only provider policy remain authoritative. Questions/results and onboarded
+datasets can themselves be sensitive: protect terminal
 output, redirects and shell history/process arguments. This is not a secret
 redactor or OS/process security layer.
 
-Language support is the existing bounded English grammar; see
+Without mediation, language support is the existing bounded English grammar; see
 [orchestration](orchestration.md) for exact screening scope and clarification rules.
 Chat retains one bounded context, not history or unrestricted memory. The
 application adds no command history or transcript file; host terminal/shell
