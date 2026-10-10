@@ -71,6 +71,24 @@ class ManagerResponse(TypedDict):
     clarification: dict | None
 
 
+class DatasetCapabilityProjection(TypedDict):
+    dataset_id: str | None
+    canonical_domain: str | None
+    currency: dict[str, str | None]
+    identifier: str
+    state: str
+    semantic_readiness: str
+    policy_readiness: str
+    execution_readiness: str
+    reasons: list[str]
+    limitations: list[str]
+    operations: list[dict]
+
+
+class DynamicManagerResponse(ManagerResponse):
+    dataset_capability: DatasetCapabilityProjection
+
+
 def response(info, status, *, selected=None, result=None, delegated_status=None,
              summary="", warnings=(), errors=(), clarification=None) -> ManagerResponse:
     # Copies also isolate convenience fields from the authoritative nested result.
@@ -80,6 +98,22 @@ def response(info, status, *, selected=None, result=None, delegated_status=None,
             "summary": summary, "warnings": deepcopy(list(warnings)),
             "limitations": list(info.limitations) if info else [],
             "errors": deepcopy(list(errors)), "clarification": deepcopy(clarification)}
+
+
+def dynamic_response(info, status, *, dataset_capability: DatasetCapabilityProjection, result,
+                     summary="", warnings=(), errors=()) -> DynamicManagerResponse:
+    wrapped = response(
+        info,
+        status,
+        result=result,
+        delegated_status=status,
+        summary=summary,
+        warnings=warnings,
+        errors=errors,
+    )
+    wrapped["manager_version"] = "1.1"
+    wrapped["dataset_capability"] = deepcopy(dataset_capability)
+    return wrapped
 
 
 @dataclass(frozen=True, slots=True)

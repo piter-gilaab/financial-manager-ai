@@ -2,8 +2,16 @@
 
 from copy import deepcopy
 import json
+from pathlib import Path
 
-from .models import Availability, Capability, ManagerResponse, response
+from .models import (
+    Availability,
+    Capability,
+    DynamicManagerResponse,
+    ManagerResponse,
+    dynamic_response,
+    response,
+)
 from .registry import CapabilityRegistry
 from .routing import route
 from .orchestration import orchestrate
@@ -67,8 +75,17 @@ def wrap_anomaly(info, result):
 class FinancialManagerAgent:
     """One explicit facade. No domain arithmetic, DB access or model interpretation."""
 
-    def __init__(self, *, financial_analysis=None, anomaly_detection=None):
+    def __init__(self, *, financial_analysis=None, anomaly_detection=None,
+                 onboarding_root: Path | str = Path("data/onboarding")):
+        # Keep the established manager import graph independent of onboarding.
+        # These deterministic collaborators are application configuration, not
+        # request-selected implementations.
+        from src.execution.binding import DynamicQueryBinder
+        from src.onboarding.manager import OnboardingManager
+
         self._registry = CapabilityRegistry(financial_analysis, anomaly_detection)
+        self._dynamic_onboarding = OnboardingManager(onboarding_root)
+        self._dynamic_binder = DynamicQueryBinder(onboarding_root)
 
     def list_capabilities(self):
         return self._registry.list_capabilities()
@@ -108,3 +125,36 @@ class FinancialManagerAgent:
         if info.identifier == Capability.FINANCIAL_ANALYSIS:
             return wrap_analysis(info, result)
         return wrap_anomaly(info, result)
+
+    def execute_dataset_request(self, request) -> DynamicManagerResponse:
+        """Execute one explicitly targeted, bounded onboarded-dataset request."""
+        from src.execution.binding import DynamicQueryRequest
+        from src.onboarding.models import OnboardingError
+
+        dataset_capability = self._dynamic_onboarding.blocked_financial_analysis_readiness()
+        if isinstance(request, DynamicQueryRequest) and type(request.dataset_id) is str:
+            try:
+                dataset_capability = self._dynamic_onboarding.financial_analysis_readiness(
+                    request.dataset_id,
+                )
+            except OnboardingError:
+                pass
+        result = self._dynamic_binder.execute(request)
+        require_data_result(result)
+        status = result.get("status")
+        if status not in DOMAIN_STATUSES:
+            raise ValueError("Dynamic Financial Analysis returned an incompatible status.")
+
+        info = self._registry.get(Capability.FINANCIAL_ANALYSIS)
+        quality = result.get("quality")
+        warnings = quality.get("warnings", ()) if type(quality) is dict else ()
+        errors = result.get("errors", ())
+        return dynamic_response(
+            info,
+            status,
+            dataset_capability=dataset_capability,
+            result=result,
+            summary=f"Dynamic Financial Analysis returned {status}.",
+            warnings=warnings,
+            errors=errors,
+        )
