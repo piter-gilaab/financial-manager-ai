@@ -5,10 +5,16 @@ import json
 import re
 import unicodedata
 
+from src.dynamic_financial import dynamic_parameters_supported
+
 from .catalog import REQUESTS, USER_TEXT
 from .models import (
-    CAPABILITIES, CLARIFICATION_KINDS, FOLLOW_UP_INTENTS, LANGUAGES, MEDIATION_VERSION,
-    OPERATIONS, PRESENTATIONS, MediationIntent, MediationRejected, NaturalResponse,
+    CAPABILITIES, CLARIFICATION_KINDS, CURRENT_MEDIATION_VERSION,
+    DATASET_CLARIFICATION_KINDS, DATASET_MEDIATION_VERSION, DYNAMIC_ANOMALY_OPERATIONS,
+    DYNAMIC_FINANCIAL_OPERATIONS, FOLLOW_UP_INTENTS, LANGUAGES,
+    LEGACY_CLARIFICATION_KINDS, LEGACY_OPERATIONS, MEDIATION_VERSION,
+    MISSING_DIMENSION_POLICIES, OPERATIONS, PERIOD_GRANULARITIES,
+    PRESENTATIONS, MediationIntent, MediationRejected, NaturalResponse,
 )
 
 
@@ -17,6 +23,9 @@ INTENT_KEYS = frozenset((
     "version", "operation", "intent", "capability_hint", "clarification_answer",
     "clarification_kind", "evidence_reference", "follow_up_intent", "presentation_hint",
     "response_language",
+))
+DYNAMIC_INTENT_KEYS = INTENT_KEYS | frozenset((
+    "dataset_id", "dynamic_operation", "period_granularity", "missing_dimension",
 ))
 FENCED_JSON = re.compile(r"\A```(?:json)?\s*\n(.*)\n```\Z", re.S)
 
@@ -65,24 +74,48 @@ def _enum(value, allowed, *, nullable=True):
 def parse_intent(raw, context):
     """Return a validated MediationIntent or raise MediationRejected. Never repairs input."""
     data = load_object(raw, MAX_INTENT_CHARACTERS)
-    if set(data) != INTENT_KEYS:
+    version = data.get("version")
+    dynamic_versions = (DATASET_MEDIATION_VERSION, CURRENT_MEDIATION_VERSION)
+    expected_keys = DYNAMIC_INTENT_KEYS if version in dynamic_versions else INTENT_KEYS
+    if set(data) != expected_keys:
         raise MediationRejected("intent_keys_mismatch")
-    if data["version"] != MEDIATION_VERSION:
+    if version not in (MEDIATION_VERSION, *dynamic_versions):
         raise MediationRejected("unsupported_version")
-    operation = _enum(data["operation"], OPERATIONS, nullable=False)
+    operation = _enum(
+        data["operation"], OPERATIONS if version == CURRENT_MEDIATION_VERSION else (
+            (*LEGACY_OPERATIONS, "SELECT_DYNAMIC_DATASET", "DYNAMIC_FINANCIAL_ANALYSIS")
+            if version == DATASET_MEDIATION_VERSION else LEGACY_OPERATIONS
+        ),
+        nullable=False,
+    )
     identifier = _enum(data["intent"], (*REQUESTS, USER_TEXT))
     capability = _enum(data["capability_hint"], CAPABILITIES)
     answer = _enum(data["clarification_answer"], context.pending_choices)
-    kind = _enum(data["clarification_kind"], CLARIFICATION_KINDS)
+    clarification_kinds = (
+        CLARIFICATION_KINDS if version == CURRENT_MEDIATION_VERSION else
+        DATASET_CLARIFICATION_KINDS if version == DATASET_MEDIATION_VERSION else
+        LEGACY_CLARIFICATION_KINDS
+    )
+    kind = _enum(data["clarification_kind"], clarification_kinds)
     reference = _enum(data["evidence_reference"], context.reference_labels)
     follow_up = _enum(data["follow_up_intent"], FOLLOW_UP_INTENTS)
     presentation = _enum(data["presentation_hint"], PRESENTATIONS)
     language = _enum(data["response_language"], LANGUAGES, nullable=False)
+    dataset_ids = tuple(item.dataset_id for item in context.dynamic_datasets)
+    dataset_id = _enum(data.get("dataset_id"), dataset_ids)
+    dynamic_operation = _enum(
+        data.get("dynamic_operation"),
+        (*DYNAMIC_FINANCIAL_OPERATIONS, *DYNAMIC_ANOMALY_OPERATIONS),
+    )
+    granularity = _enum(data.get("period_granularity"), PERIOD_GRANULARITIES)
+    missing_dimension = _enum(data.get("missing_dimension"), MISSING_DIMENSION_POLICIES)
 
     used = {name for name, value in (
         ("intent", identifier), ("clarification_answer", answer),
         ("clarification_kind", kind), ("evidence_reference", reference),
         ("follow_up_intent", follow_up),
+        ("dataset_id", dataset_id), ("dynamic_operation", dynamic_operation),
+        ("period_granularity", granularity), ("missing_dimension", missing_dimension),
     ) if value is not None}
     # operation -> (fields it may set, fields it must set)
     permitted, required = {
@@ -90,14 +123,49 @@ def parse_intent(raw, context):
         "ANSWER_CLARIFICATION": ({"clarification_answer"}, {"clarification_answer"}),
         "EVIDENCE_FOLLOWUP": ({"evidence_reference", "follow_up_intent"}, {"follow_up_intent"}),
         "REQUEST_CLARIFICATION": ({"clarification_kind"}, {"clarification_kind"}),
+        "SELECT_DYNAMIC_DATASET": ({"dataset_id"}, {"dataset_id"}),
+        "DYNAMIC_FINANCIAL_ANALYSIS": (
+            {"dataset_id", "dynamic_operation", "period_granularity", "missing_dimension"},
+            {"dynamic_operation"},
+        ),
+        "DYNAMIC_ANOMALY_SCREEN": (
+            {"dataset_id", "dynamic_operation"}, {"dynamic_operation"},
+        ),
     }[operation]
     if not used <= permitted or not required <= used:
         raise MediationRejected("operation_fields_inconsistent")
     if operation == "EVIDENCE_FOLLOWUP" and not context.reference_labels:
         raise MediationRejected("no_evidence_context")
+    if (operation in {"SELECT_DYNAMIC_DATASET", "DYNAMIC_FINANCIAL_ANALYSIS",
+                      "DYNAMIC_ANOMALY_SCREEN"}
+            and context.invalid_dynamic_dataset_reference):
+        raise MediationRejected("invalid_dataset_target")
+    if operation in {"SELECT_DYNAMIC_DATASET", "DYNAMIC_FINANCIAL_ANALYSIS",
+                     "DYNAMIC_ANOMALY_SCREEN"}:
+        explicit = context.explicit_dynamic_dataset_ids
+        if (explicit and (len(explicit) != 1 or dataset_id != explicit[0])
+                or not explicit and dataset_id is not None
+                and dataset_id != context.selected_dynamic_dataset):
+            raise MediationRejected("dataset_target_not_authorized")
+    if (operation == "DYNAMIC_FINANCIAL_ANALYSIS"
+            and not dynamic_parameters_supported(
+                dynamic_operation,
+                granularity=granularity,
+                missing_dimension=missing_dimension,
+            )):
+        raise MediationRejected("dynamic_parameter_mismatch")
+    if (operation == "DYNAMIC_ANOMALY_SCREEN"
+            and dynamic_operation not in DYNAMIC_ANOMALY_OPERATIONS):
+        raise MediationRejected("dynamic_anomaly_operation_mismatch")
 
     request = REQUESTS.get(identifier)
-    if capability is not None and (request is None or request.capability != capability):
+    expected_capability = (
+        ("FINANCIAL_ANALYSIS" if operation == "DYNAMIC_FINANCIAL_ANALYSIS"
+         else "ANOMALY_DETECTION" if operation == "DYNAMIC_ANOMALY_SCREEN"
+         else None)
+        or (request.capability if request is not None else None)
+    )
+    if capability is not None and capability != expected_capability:
         # A hint can confirm the catalog entry; it can never select or change a capability.
         raise MediationRejected("capability_hint_mismatch")
     return MediationIntent(
@@ -110,6 +178,10 @@ def parse_intent(raw, context):
         follow_up_intent=follow_up,
         presentation_hint=presentation,
         response_language=language,
+        dataset_id=dataset_id,
+        dynamic_operation=dynamic_operation,
+        period_granularity=granularity,
+        missing_dimension=missing_dimension,
     )
 
 
@@ -134,7 +206,7 @@ NUMBER = re.compile(
     re.I,
 )
 FORBIDDEN_PATTERNS = (
-    # Currency: every current denomination is UNKNOWN, so no code, symbol or name is grounded.
+    # Currency prose stays forbidden; code renders any approved evidence status separately.
     ("currency_claim", re.compile(
         r"\b(?:USD|CAD|BRL|EUR|GBP|MXN|JPY|CNY|CHF|AUD|NZD|INR|ARS|CLP|COP|PEN|ZAR|SEK|NOK|DKK|"
         r"HKD|SGD|KRW|RUB|TRY|PLN)\b|[$€£¥₹₩₽]")),

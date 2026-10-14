@@ -313,7 +313,10 @@ class PromptBoundaryTests(unittest.TestCase):
         self.assertEqual(data["user_input"], hostile)
         self.assertEqual(set(data), {"prompt_version", "allowed_requests",
                                      "pending_clarification_choices",
-                                     "issued_reference_labels", "user_input"})
+                                     "issued_reference_labels", "dynamic_datasets",
+                                     "selected_dynamic_dataset", "last_dynamic_operation",
+                                     "explicit_dynamic_dataset_ids",
+                                     "invalid_dynamic_dataset_reference", "user_input"})
         self.assertEqual(data["pending_clarification_choices"], ["receiver_general", "company_financials"])
         self.assertEqual(data["issued_reference_labels"], ["A1"])
         ids = [entry["id"] for entry in data["allowed_requests"]]
@@ -369,18 +372,18 @@ class OllamaStructuredOutputTests(unittest.TestCase):
 
     def test_provider_requests_the_closed_intent_schema_from_the_endpoint(self):
         from src.mediation.catalog import REQUESTS
-        from src.mediation.validation import INTENT_KEYS
+        from src.mediation.validation import DYNAMIC_INTENT_KEYS
 
         _, body, _ = self.complete(intent_json(), self.CONTEXT)
         response_format = body["response_format"]
         self.assertEqual(response_format["type"], "json_schema")
         schema = response_format["json_schema"]["schema"]
         self.assertTrue(response_format["json_schema"]["strict"])
-        self.assertEqual(set(schema["required"]), INTENT_KEYS)
-        self.assertEqual(set(schema["properties"]), INTENT_KEYS)
+        self.assertEqual(set(schema["required"]), DYNAMIC_INTENT_KEYS)
+        self.assertEqual(set(schema["properties"]), DYNAMIC_INTENT_KEYS)
         self.assertFalse(schema["additionalProperties"])
         properties = schema["properties"]
-        self.assertEqual(properties["version"]["enum"], ["1.0"])
+        self.assertEqual(properties["version"]["enum"], ["1.2"])
         self.assertEqual(set(properties["intent"]["enum"]), {*REQUESTS, "USER_TEXT", None})
         self.assertEqual(properties["clarification_answer"]["enum"],
                          ["FINANCIAL_ANALYSIS", "ANOMALY_DETECTION", None])

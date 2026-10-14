@@ -2,12 +2,15 @@
 
 from .local_provider import LocalHTTPProvider
 from .mediator import ConversationMediator, MediatedTurn
-from .models import InterpretationContext, MediationIntent, MediationRejected, NaturalResponse
+from .models import (
+    DynamicDatasetOption, InterpretationContext, MediationIntent, MediationRejected,
+    NaturalResponse,
+)
 from .provider import MediationProvider, ProviderFailure, ProviderRequest, ScriptedProvider
 from .validation import parse_intent
 
 __all__ = [
-    "ConversationMediator", "InterpretationContext", "LocalHTTPProvider", "MediatedTurn",
+    "ConversationMediator", "DynamicDatasetOption", "InterpretationContext", "LocalHTTPProvider", "MediatedTurn",
     "MediationIntent", "MediationProvider", "MediationRejected", "NaturalResponse",
     "ProviderFailure", "ProviderRequest", "ScriptedProvider", "parse_intent",
 ]

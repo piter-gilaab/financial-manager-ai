@@ -215,9 +215,10 @@ The output is displayed only if every check passes:
   facts. Derived differences, shares, sign-dropped values and invented counts
   are rejected;
 - no currency codes, symbols or currency names (`USD`, `$`, `R$`, `dollars`,
-  `reais`, …). Because every current denomination is UNKNOWN, there is no
-  legitimate reason to name one. If a CONFIRMED currency is ever approved, this
-  rule must be revisited deliberately rather than relaxed implicitly;
+  `reais`, …). At this historical Phase 12 checkpoint, every available
+  denomination was `UNKNOWN`, so there was no legitimate reason to name one.
+  Steps 66–69 later extended the guard to render explicitly approved
+  `CONFIRMED` dynamic currency from evidence without inferring it;
 - no fraud, error, misconduct, certainty, probability or suspicion language;
 - no multiplicative comparisons written in words (`twice`, `half`, `o dobro`,
   `metade`, `3 vezes`), which are arithmetic the model may not perform;
@@ -334,3 +335,54 @@ No financial calculation by the model, arbitrary SQL/tools, direct database
 access, persistent memory or transcripts, external/private providers,
 Forecasting, RAG, anomaly algorithm changes, currency inference, fraud detection,
 web UI, or Phase 13 work.
+
+## Phase 17 Steps 66–67: structured intent version 1.1
+
+Version 1.1 is additive and the validator continues to accept the exact legacy
+version-1.0 shape. The provider-facing schema now adds two operations,
+`SELECT_DYNAMIC_DATASET` and `DYNAMIC_FINANCIAL_ANALYSIS`, and four nullable
+fields: `dataset_id`, `dynamic_operation`, `period_granularity` and
+`missing_dimension`. Dataset IDs are per-turn enums from the bounded catalog;
+operations are the exact nine `SALES_RECORD` values; parameter enums remain
+`MONTH|YEAR` and `BUCKET|EXCLUDE`. Unknown keys/values and inconsistent field
+combinations still reject the whole proposal.
+
+Interpretation context adds only safe catalog metadata (limit 20), one current
+opaque selection, one last closed operation, and exact IDs found by code in the
+current turn. It contains no filename, path, row, value, sample, profile, mapping
+or transcript. Multiple, malformed, unknown, path-derived and out-of-catalog IDs
+fail closed. With no explicit/current selection, even one catalog entry requires
+the user to select its exact ID. A current/explicit dynamic target cannot be
+silently redirected by the model to a legacy analysis or anomaly request.
+
+Validated dynamic analysis calls the session's deterministic resolver and then
+`FinancialManagerAgent.execute_dataset_request`; the mediator never constructs
+an executable string. Dynamic evidence feeds the unchanged fact catalog and
+grounding guard. `UNKNOWN` and approved `CONFIRMED` currency are rendered from
+evidence; currency is never inferred. If response generation fails, code renders
+the same authoritative evidence. If interpretation fails while a dynamic target
+is present, nothing is executed rather than substituting a legacy dataset.
+
+At the Steps 66–67 checkpoint, dynamic anomaly language returned a code-owned
+Step-68 deferral and never invoked `execute_dataset_anomaly_request`. The next
+section supersedes that historical boundary. Forecasting and Document Retrieval
+keep their existing deterministic blockers.
+
+## Phase 17 Steps 68–69: structured intent version 1.2
+
+Version 1.2 adds only `DYNAMIC_ANOMALY_SCREEN` and extends the existing
+`dynamic_operation` enum with `SALES_ANOMALY_SCREEN|PROFIT_ANOMALY_SCREEN`.
+Exact version-1.0 and version-1.1 shapes remain accepted. Dataset IDs remain
+per-turn catalog enums. The action accepts no algorithm, threshold, peer group,
+filter, source column or executable request text.
+
+The historical `DYNAMIC_ANOMALY_DEFERRED` clarification remains valid only in an
+exact version-1.1 compatibility payload. It is absent from the provider-facing
+version-1.2 schema and rejected when proposed under version 1.2.
+
+The safe catalog entry adds anomaly state and currently supported anomaly
+operation identifiers; the 20-entry bound and row/value/path exclusions remain.
+`EVIDENCE_FOLLOWUP` is reused for `why_selected|record_detail` only when a current
+A1–A10 label exists. Grounding receives bounded facts derived from authoritative
+Phase 16 evidence. Provider failure, invented IDs/labels/operations and fraud or
+numeric fabrication execute nothing or fall back to code-owned presentation.

@@ -20,6 +20,7 @@ from .security import is_data_only, require_data_result
 
 DOMAIN_STATUSES = {"SUCCESS", "PARTIAL", "NO_DATA", "INVALID_REQUEST", "UNSUPPORTED", "DATA_QUALITY_BLOCKER"}
 AGENT_ONLY_STATUSES = {"CLARIFICATION_REQUIRED", "INVALID_REQUEST", "UNSUPPORTED", "PROVIDER_UNAVAILABLE", "PROVIDER_ERROR"}
+MAX_DYNAMIC_DATASET_CATALOG = 20
 
 
 def validate_payload(capability, payload):
@@ -112,6 +113,57 @@ class FinancialManagerAgent:
     def ask(self, question):
         """Route and execute a bounded natural-language capability request."""
         return orchestrate(self, question)
+
+    def dynamic_dataset_catalog(self, *, candidate_id=None):
+        """Return bounded safe metadata for currently executable SALES_RECORD datasets."""
+        from src.dynamic_anomaly import DYNAMIC_ANOMALY_OPERATIONS
+        from src.dynamic_financial import DYNAMIC_FINANCIAL_OPERATIONS
+        from src.onboarding.models import OnboardingError
+        from src.onboarding.registry import re_dataset_id
+
+        allowed_operations = set(DYNAMIC_FINANCIAL_OPERATIONS)
+        candidate = candidate_id if re_dataset_id(candidate_id) else None
+        identifiers = list(self._dynamic_onboarding.registered_dataset_ids())
+        if candidate in identifiers:
+            identifiers.remove(candidate)
+            identifiers.insert(0, candidate)
+        datasets = []
+        eligible_count = 0
+        for dataset_id in identifiers:
+            try:
+                readiness = self._dynamic_onboarding.financial_analysis_readiness(dataset_id)
+            except OnboardingError:
+                continue
+            try:
+                anomaly_readiness = self._dynamic_onboarding.anomaly_detection_readiness(dataset_id)
+            except OnboardingError:
+                anomaly_readiness = {"state": "BLOCKED", "operations": ()}
+            supported = [
+                item["identifier"] for item in readiness.get("operations", ())
+                if (type(item) is dict and item.get("state") == "SUPPORTED"
+                    and item.get("identifier") in allowed_operations)
+            ]
+            if readiness.get("canonical_domain") != "SALES_RECORD" or not supported:
+                continue
+            eligible_count += 1
+            if len(datasets) < MAX_DYNAMIC_DATASET_CATALOG:
+                datasets.append({
+                    "dataset_id": dataset_id,
+                    "canonical_domain": "SALES_RECORD",
+                    "state": readiness["state"],
+                    "supported_operations": supported,
+                    "anomaly_state": anomaly_readiness["state"],
+                    "supported_anomaly_operations": [
+                        item["identifier"] for item in anomaly_readiness.get("operations", ())
+                        if (type(item) is dict and item.get("state") == "SUPPORTED"
+                            and item.get("identifier") in DYNAMIC_ANOMALY_OPERATIONS)
+                    ],
+                })
+        return {
+            "catalog_limit": MAX_DYNAMIC_DATASET_CATALOG,
+            "truncated": eligible_count > MAX_DYNAMIC_DATASET_CATALOG,
+            "datasets": datasets,
+        }
 
     def execute(self, *, capability=None, request=None) -> ManagerResponse:
         info = self._registry.get(capability)

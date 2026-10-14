@@ -104,6 +104,7 @@ def _write_status(session, stdout):
         for key in (
             "conversation_version", "status", "created_at", "last_activity_at",
             "inactivity_expires_at", "absolute_expires_at", "active_context",
+            "dynamic_dataset",
         )
     }
     stdout.write("Session status:\n" + terminal_text(details(safe)) + "\n")

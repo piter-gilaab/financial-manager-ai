@@ -1,5 +1,10 @@
 # Dynamic anomaly Manager integration contract
 
+Historical boundary note: this Step 64 contract did not extend conversational
+candidate follow-up. Phase 17 Steps 68–69 later added that bounded route under
+`conversational_dynamic_anomaly_contract.md`; the explicit Manager interface and
+authority rules below remain unchanged.
+
 ## Scope and vocabulary
 
 This contract activates explicit Manager execution for the two approved dynamic
@@ -62,12 +67,12 @@ dataset-scoped, deterministic, bounded to 20, non-executable and include only
 actual `CANDIDATE` records with canonical/source lineage. Step 64 does not add a
 second reference framework.
 
-The existing conversational follow-up mechanism is not extended to dynamic
-anomaly evidence. It is coupled to legacy anomaly evidence and re-execution via
-natural-language `ask()`. Supporting the new explicit request and evidence
-shape would require a session redesign outside this phase. Callers can inspect
-the authoritative ordered assessments and candidate references in the explicit
-Manager response.
+At the Step 64 checkpoint, the existing conversational follow-up mechanism was
+not extended to dynamic anomaly evidence because it was coupled to legacy
+evidence and natural-language `ask()` re-execution. Phase 17 Steps 68–69 later
+added a separately validated fresh-evidence session path for this explicit
+request/evidence shape. Callers can still inspect the authoritative ordered
+assessments and candidate references in the explicit Manager response.
 
 ## Safety and compatibility
 

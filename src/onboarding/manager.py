@@ -60,6 +60,10 @@ class OnboardingManager:
     def status(self, dataset_id: str) -> dict:
         return dict(self._state(dataset_id))
 
+    def registered_dataset_ids(self) -> tuple[str, ...]:
+        """Return opaque current registry identifiers without exposing artifacts."""
+        return self._registry.current_dataset_ids()
+
     def profile(self, dataset_id: str) -> dict:
         return self._profile(dataset_id).to_dict()
 

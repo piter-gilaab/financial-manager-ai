@@ -10,6 +10,9 @@ import json
 import re
 from uuid import uuid4
 
+from src.dynamic_financial import DYNAMIC_FINANCIAL_OPERATIONS, dynamic_parameters_supported
+from src.dynamic_anomaly import DYNAMIC_ANOMALY_OPERATIONS
+
 from .agent import FinancialManagerAgent
 
 
@@ -55,6 +58,8 @@ RECORD_COUNT_QUESTIONS = {
 }
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 RUN_ID_PATTERN = re.compile(r"[0-9]{8}T[0-9]{12}Z_[0-9a-f]{8}\Z")
+DATASET_ID_PATTERN = re.compile(r"ds_[0-9a-f]{20}\Z")
+CANONICAL_RECORD_ID_PATTERN = re.compile(r"rec_[0-9a-f]{20}\Z")
 
 
 class ReconstructionKind(str, Enum):
@@ -89,6 +94,13 @@ class SnapshotBinding:
 
 
 @dataclass(frozen=True, slots=True)
+class DynamicSnapshotBinding:
+    dataset_id: str
+    operation: str
+    lineage_digest: str
+
+
+@dataclass(frozen=True, slots=True)
 class EvidenceHandle:
     handle: str
     session_id: str
@@ -96,7 +108,7 @@ class EvidenceHandle:
     dataset: str
     measure: str
     record_id: str
-    snapshot: SnapshotBinding
+    snapshot: SnapshotBinding | DynamicSnapshotBinding
     result_digest: str
 
 
@@ -106,6 +118,13 @@ class EvidenceContext:
     dataset: str
     measure: str
     handles: tuple[EvidenceHandle, ...]
+    operation: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DynamicDatasetContext:
+    dataset_id: str
+    last_operation: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,6 +135,7 @@ class SessionState:
     last_activity_at: datetime
     absolute_expires_at: datetime
     active_context: ActiveContext | EvidenceContext | None = None
+    dynamic_dataset: DynamicDatasetContext | None = None
 
 
 def _utc_now():
@@ -169,31 +189,46 @@ def _validate_context(context):
     if context is None:
         return
     if type(context) is EvidenceContext:
-        if (context.capability != "ANOMALY_DETECTION"
-                or context.dataset not in ("receiver_general", "company_financials")
-                or context.measure not in (("accounting_amount",) if context.dataset == "receiver_general"
-                                           else ("sales", "profit"))
+        legacy = context.dataset in ("receiver_general", "company_financials")
+        dynamic = DATASET_ID_PATTERN.fullmatch(context.dataset) is not None
+        if (context.capability != "ANOMALY_DETECTION" or not (legacy or dynamic)
                 or type(context.handles) is not tuple or not context.handles
                 or len(context.handles) > MAX_EVIDENCE_HANDLES
                 or any(type(item) is not EvidenceHandle for item in context.handles)):
             raise ValueError("Conversation evidence context is outside the approved scope.")
+        if legacy and (context.operation is not None
+                       or context.measure not in (("accounting_amount",)
+                                                  if context.dataset == "receiver_general"
+                                                  else ("sales", "profit"))):
+            raise ValueError("Conversation legacy evidence context is invalid.")
+        if dynamic and (context.operation not in DYNAMIC_ANOMALY_OPERATIONS
+                        or context.measure not in ("SALES", "PROFIT")):
+            raise ValueError("Conversation dynamic evidence context is invalid.")
         if len({item.handle for item in context.handles}) != len(context.handles):
             raise ValueError("Conversation evidence handles must be unique.")
         for item in context.handles:
             if (item.capability != context.capability
                     or item.dataset != context.dataset or item.measure != context.measure
-                    or type(item.snapshot) is not SnapshotBinding
-                    or item.snapshot.dataset != item.dataset
                     or not _valid_session_id(item.handle)
                     or not _valid_session_id(item.session_id)
-                    or not _valid_sha256(item.record_id)
+                    or (legacy and not _valid_sha256(item.record_id))
+                    or (dynamic and CANONICAL_RECORD_ID_PATTERN.fullmatch(item.record_id) is None)
                     or not _valid_sha256(item.result_digest)
-                    or not _valid_run_id(item.snapshot.approved_run_id)
-                    or not all(_valid_sha256(value) for value in (
-                        item.snapshot.schema_sha256,
-                        item.snapshot.manifest_sha256, item.snapshot.validation_sha256,
-                        item.snapshot.flags_sha256, item.snapshot.source_sha256,
-                        item.snapshot.processed_sha256,
+                    or (legacy and (
+                        type(item.snapshot) is not SnapshotBinding
+                        or item.snapshot.dataset != item.dataset
+                        or not _valid_run_id(item.snapshot.approved_run_id)
+                        or not all(_valid_sha256(value) for value in (
+                            item.snapshot.schema_sha256, item.snapshot.manifest_sha256,
+                            item.snapshot.validation_sha256, item.snapshot.flags_sha256,
+                            item.snapshot.source_sha256, item.snapshot.processed_sha256,
+                        ))
+                    ))
+                    or (dynamic and (
+                        type(item.snapshot) is not DynamicSnapshotBinding
+                        or item.snapshot.dataset_id != item.dataset
+                        or item.snapshot.operation != context.operation
+                        or not _valid_sha256(item.snapshot.lineage_digest)
                     ))):
                 raise ValueError("Conversation evidence handle is invalid.")
         return
@@ -228,6 +263,13 @@ def _validate_state(state):
             and state.absolute_expires_at == state.created_at + ABSOLUTE_LIMIT):
         raise ValueError("Conversation state lifecycle is inconsistent.")
     _validate_context(state.active_context)
+    dynamic = state.dynamic_dataset
+    if (dynamic is not None
+            and (type(dynamic) is not DynamicDatasetContext
+                 or DATASET_ID_PATTERN.fullmatch(dynamic.dataset_id) is None
+                 or (dynamic.last_operation is not None
+                     and dynamic.last_operation not in DYNAMIC_FINANCIAL_OPERATIONS))):
+        raise ValueError("Conversation dynamic dataset context is invalid.")
     if type(state.active_context) is EvidenceContext:
         if any(item.session_id != state.session_id for item in state.active_context.handles):
             raise ValueError("Conversation evidence belongs to another session.")
@@ -242,6 +284,7 @@ def _context_dict(context):
             "capability": context.capability,
             "dataset": context.dataset,
             "measure": context.measure,
+            "operation": context.operation,
             "reference_count": len(context.handles),
         }
     pending = context.pending
@@ -257,6 +300,12 @@ def _context_dict(context):
 
 
 def _snapshot_dict(binding):
+    if type(binding) is DynamicSnapshotBinding:
+        return {
+            "dataset_id": binding.dataset_id,
+            "operation": binding.operation,
+            "lineage_digest": binding.lineage_digest,
+        }
     return {
         "approved_run_id": binding.approved_run_id,
         "dataset": binding.dataset,
@@ -348,12 +397,13 @@ class FinancialManagerSession:
             return "EXPIRED"
         return "ACTIVE"
 
-    def _replace_state(self, *, context, last_activity_at=None):
+    def _replace_state(self, *, context, last_activity_at=None, dynamic_dataset=...):
         state = self._state
         _validate_state(state)
         next_state = replace(
             state,
             active_context=context,
+            dynamic_dataset=(state.dynamic_dataset if dynamic_dataset is ... else dynamic_dataset),
             last_activity_at=state.last_activity_at if last_activity_at is None else last_activity_at,
         )
         _validate_state(next_state)
@@ -527,6 +577,109 @@ class FinancialManagerSession:
         _validate_context(context)
         return context
 
+    def _dynamic_evidence_parts(self, result):
+        evidence = result.get("delegated_result") if type(result) is dict else None
+        body = evidence.get("result") if type(evidence) is dict else None
+        if (result.get("execution_status") not in ("SUCCESS", "PARTIAL")
+                or type(body) is not dict):
+            return None
+        dataset = body.get("dataset_id")
+        operation = body.get("operation")
+        measure = body.get("measure")
+        assessments = body.get("assessments")
+        candidate_references = body.get("candidate_references")
+        lineage = body.get("lineage")
+        reference = body.get("reference")
+        quality = body.get("quality")
+        if (DATASET_ID_PATTERN.fullmatch(dataset or "") is None
+                or operation not in DYNAMIC_ANOMALY_OPERATIONS
+                or measure not in ("SALES", "PROFIT")
+                or body.get("scope") != "GLOBAL"
+                or body.get("policy") != {"name": "tukey_iqr", "version": "1.0"}
+                or type(assessments) is not list
+                or type(candidate_references) is not list
+                or type(lineage) is not dict
+                or type(reference) is not dict
+                or type(quality) is not dict
+                or evidence.get("dataset") != dataset
+                or evidence.get("query_name") != operation):
+            return None
+        by_id = {}
+        for item in assessments:
+            if (type(item) is not dict
+                    or item.get("dataset_id") != dataset
+                    or CANONICAL_RECORD_ID_PATTERN.fullmatch(
+                        item.get("canonical_record_id") or ""
+                    ) is None
+                    or type(item.get("source_row_number")) is not int
+                    or item["source_row_number"] < 1
+                    or item.get("status") not in {
+                        "CANDIDATE", "NOT_SELECTED", "NOT_ASSESSED",
+                    }
+                    or item.get("tail") not in (None, "lower", "upper")
+                    or not _valid_optional_text(item.get("observed_value"))
+                    or not _valid_optional_text(item.get("observed_raw"))
+                    or not _valid_optional_text(item.get("observed_status"))
+                    or type(item.get("quality_warning_indices")) is not list):
+                return None
+            by_id[item["canonical_record_id"]] = item
+        if len(by_id) != len(assessments) or len(candidate_references) > 20:
+            return None
+        candidates = []
+        for candidate in candidate_references:
+            if (type(candidate) is not dict
+                    or set(candidate) != {
+                        "dataset_id", "canonical_record_id", "source_sheet",
+                        "source_row_number",
+                    }
+                    or candidate["dataset_id"] != dataset
+                    or CANONICAL_RECORD_ID_PATTERN.fullmatch(
+                        candidate["canonical_record_id"]
+                    ) is None
+                    or type(candidate["source_row_number"]) is not int
+                    or candidate["source_row_number"] < 1):
+                return None
+            item = by_id.get(candidate["canonical_record_id"])
+            if (item is None or item.get("status") != "CANDIDATE"
+                    or item.get("source_row_number") != candidate["source_row_number"]
+                    or item.get("source_sheet") != candidate["source_sheet"]):
+                return None
+            candidates.append(item)
+        expected_candidates = [
+            item for item in assessments if item.get("status") == "CANDIDATE"
+        ][:20]
+        if ([item["canonical_record_id"] for item in candidates]
+                != [item["canonical_record_id"] for item in expected_candidates]):
+            return None
+        try:
+            binding = DynamicSnapshotBinding(
+                dataset, operation, _semantic_digest(lineage),
+            )
+            digest = _semantic_digest(evidence)
+        except (TypeError, ValueError):
+            return None
+        return evidence, dataset, operation, measure, assessments, candidates, binding, digest
+
+    def _capture_dynamic_evidence(self, result):
+        parts = self._dynamic_evidence_parts(result)
+        if parts is None:
+            return None
+        _evidence, dataset, operation, measure, _items, candidates, binding, digest = parts
+        if not candidates:
+            return None
+        handles = tuple(
+            EvidenceHandle(
+                self._new_reference_id(), self._state.session_id, "ANOMALY_DETECTION",
+                dataset, measure, item["canonical_record_id"], binding, digest,
+            )
+            for item in candidates[:MAX_EVIDENCE_HANDLES]
+        )
+        context = EvidenceContext(
+            "ANOMALY_DETECTION", dataset, measure, handles, operation,
+        )
+        _validate_context(context)
+        return context
+
     def _followup_detail(self, evidence, item, binding, digest):
         references = {value.get("reference_id"): value
                       for value in evidence["result"]["references"] if type(value) is dict}
@@ -558,6 +711,46 @@ class FinancialManagerSession:
             "quality_warnings": applicable,
         }
 
+    def _dynamic_followup_detail(self, evidence, item, binding, digest):
+        body = evidence["result"]
+        warnings = body.get("quality", {}).get("warnings", [])
+        applicable = [deepcopy(warnings[index]) for index in item["quality_warning_indices"]
+                      if type(index) is int and 0 <= index < len(warnings)]
+        assessment = {
+            "status": item["status"],
+            "reason": item.get("reason"),
+            "reference_id": item.get("reference_id"),
+            "numeric_peer_size": item.get("numeric_reference_size"),
+            "tail": item.get("tail"),
+        }
+        return {
+            "reference_type": "ANOMALY_RECORD",
+            "capability": "ANOMALY_DETECTION",
+            "dataset": body["dataset_id"],
+            "measure": body["measure"].casefold(),
+            "operation": body["operation"],
+            "snapshot": _snapshot_dict(binding),
+            "result_digest": digest,
+            "lineage": {
+                "canonical_record_id": item["canonical_record_id"],
+                "source_sheet": item.get("source_sheet"),
+                "source_row_number": item["source_row_number"],
+            },
+            "observed_value": item.get("observed_value"),
+            "observed_raw": item.get("observed_raw"),
+            "observed_status": item.get("observed_status"),
+            "peer_values": {},
+            "assessments": {
+                "global": {
+                    "assessment": assessment,
+                    "reference": deepcopy(body["reference"]),
+                },
+            },
+            "policy": deepcopy(body["policy"]),
+            "currency": deepcopy(body["currency"]),
+            "quality_warnings": applicable,
+        }
+
     def _outcome(self, operation, status, result=None, *, error=None, references=()):
         return {
             "conversation_version": CONVERSATION_VERSION,
@@ -580,6 +773,205 @@ class FinancialManagerSession:
                       for item in context.handles) if type(context) is EvidenceContext else ()
         return self._outcome("new_request", result["execution_status"], result,
                              references=references)
+
+    def select_dynamic_dataset(self, dataset_id):
+        """Select one exact current eligible dataset for this session only."""
+        if self._state_condition() != "ACTIVE":
+            self._start()
+        catalog = self._manager.dynamic_dataset_catalog(
+            candidate_id=dataset_id if type(dataset_id) is str else None,
+        )
+        selected = next((item for item in catalog["datasets"]
+                         if type(dataset_id) is str and item["dataset_id"] == dataset_id), None)
+        if selected is None:
+            return self._outcome("select_dynamic_dataset", "INVALID_DATASET_SELECTION", error={
+                "code": "invalid_dynamic_dataset",
+                "message": "Select an exact currently eligible registered dataset identifier.",
+            })
+        self._replace_state(
+            context=None,
+            dynamic_dataset=DynamicDatasetContext(dataset_id),
+            last_activity_at=self._now(),
+        )
+        return self._outcome("select_dynamic_dataset", "DATASET_SELECTED", {
+            "dataset_id": dataset_id,
+            "canonical_domain": selected["canonical_domain"],
+            "state": selected["state"],
+            "supported_operations": list(selected["supported_operations"]),
+        })
+
+    def dynamic_dataset_catalog(self, *, candidate_id=None):
+        """Return the Manager's bounded safe catalog without exposing session internals."""
+        condition = self._state_condition()
+        current = (
+            self._state.dynamic_dataset.dataset_id
+            if condition == "ACTIVE" and self._state.dynamic_dataset is not None
+            else None
+        )
+        catalog = self._manager.dynamic_dataset_catalog(candidate_id=candidate_id or current)
+        stale_selection_cleared = False
+        if current is not None and candidate_id in (None, current):
+            if all(item["dataset_id"] != current for item in catalog["datasets"]):
+                self._replace_state(
+                    context=self._state.active_context,
+                    dynamic_dataset=None,
+                )
+                stale_selection_cleared = True
+        return deepcopy(catalog | {"stale_selection_cleared": stale_selection_cleared})
+
+    def execute_dynamic_financial_analysis(
+        self, operation, *, dataset_id=None, granularity=None, missing_dimension=None,
+    ):
+        """Resolve one session-scoped dataset and delegate one closed dynamic operation."""
+        from src.execution import DynamicQueryParameters, DynamicQueryRequest
+
+        if self._state_condition() != "ACTIVE":
+            self._start()
+        if not dynamic_parameters_supported(
+                operation, granularity=granularity, missing_dimension=missing_dimension):
+            return self._outcome("dynamic_financial_analysis", "INVALID_DYNAMIC_REQUEST", error={
+                "code": "unsupported_dynamic_parameter",
+                "message": "Use one approved dynamic Financial Analysis operation and its closed parameters.",
+            })
+
+        state = self._state
+        current = state.dynamic_dataset.dataset_id if state.dynamic_dataset is not None else None
+        explicit = dataset_id is not None
+        if explicit and (type(dataset_id) is not str
+                         or DATASET_ID_PATTERN.fullmatch(dataset_id) is None):
+            return self._outcome("dynamic_financial_analysis", "INVALID_DATASET_SELECTION", error={
+                "code": "invalid_dynamic_dataset",
+                "message": "Select an exact currently eligible registered dataset identifier.",
+            })
+        target = dataset_id if explicit else current
+        catalog = self._manager.dynamic_dataset_catalog(candidate_id=target)
+        datasets = catalog["datasets"]
+        if target is not None:
+            selected = next((item for item in datasets if item["dataset_id"] == target), None)
+            if selected is None:
+                if not explicit and current is not None:
+                    self._replace_state(
+                        context=None, dynamic_dataset=None, last_activity_at=self._now(),
+                    )
+                    return self._outcome(
+                        "dynamic_financial_analysis", "STALE_DATASET_SELECTION", error={
+                            "code": "stale_dynamic_dataset",
+                            "message": "The selected dataset is no longer currently executable; select it again.",
+                        },
+                    )
+                return self._outcome(
+                    "dynamic_financial_analysis", "INVALID_DATASET_SELECTION", error={
+                        "code": "invalid_dynamic_dataset",
+                        "message": "Select an exact currently eligible registered dataset identifier.",
+                    },
+                )
+        elif target is None:
+            return self._outcome(
+                "dynamic_financial_analysis", "CLARIFICATION_REQUIRED", error={
+                    "code": "dynamic_dataset_required",
+                    "message": "Select one exact eligible dataset before dynamic analysis.",
+                    "choices": [item["dataset_id"] for item in datasets],
+                },
+            )
+
+        request = DynamicQueryRequest(
+            target,
+            operation,
+            DynamicQueryParameters(
+                missing_dimension=missing_dimension,
+                granularity=granularity,
+            ),
+        )
+        result = self._manager.execute_dataset_request(request)
+        next_operation = (
+            operation if result["execution_status"] in {"SUCCESS", "PARTIAL", "NO_DATA"}
+            else (state.dynamic_dataset.last_operation
+                  if state.dynamic_dataset is not None and state.dynamic_dataset.dataset_id == target
+                  else None)
+        )
+        self._replace_state(
+            context=None,
+            dynamic_dataset=DynamicDatasetContext(target, next_operation),
+            last_activity_at=self._now(),
+        )
+        return self._outcome(
+            "dynamic_financial_analysis", result["execution_status"], result,
+        )
+
+    def execute_dynamic_anomaly(self, operation, *, dataset_id=None):
+        """Resolve one dataset and delegate one closed GLOBAL anomaly screen."""
+        from src.anomaly.dynamic import DynamicAnomalyRequest
+
+        if self._state_condition() != "ACTIVE":
+            self._start()
+        if type(operation) is not str or operation not in DYNAMIC_ANOMALY_OPERATIONS:
+            return self._outcome("dynamic_anomaly_screen", "INVALID_DYNAMIC_REQUEST", error={
+                "code": "unsupported_dynamic_anomaly_operation",
+                "message": "Use one approved dynamic GLOBAL anomaly operation.",
+            })
+
+        state = self._state
+        current = state.dynamic_dataset.dataset_id if state.dynamic_dataset is not None else None
+        explicit = dataset_id is not None
+        if explicit and (type(dataset_id) is not str
+                         or DATASET_ID_PATTERN.fullmatch(dataset_id) is None):
+            return self._outcome("dynamic_anomaly_screen", "INVALID_DATASET_SELECTION", error={
+                "code": "invalid_dynamic_dataset",
+                "message": "Select an exact currently eligible registered dataset identifier.",
+            })
+        target = dataset_id if explicit else current
+        catalog = self._manager.dynamic_dataset_catalog(candidate_id=target)
+        datasets = catalog["datasets"]
+        if target is not None:
+            selected = next((item for item in datasets if item["dataset_id"] == target), None)
+            if selected is None:
+                if not explicit and current is not None:
+                    self._replace_state(
+                        context=None, dynamic_dataset=None, last_activity_at=self._now(),
+                    )
+                    return self._outcome(
+                        "dynamic_anomaly_screen", "STALE_DATASET_SELECTION", error={
+                            "code": "stale_dynamic_dataset",
+                            "message": "The selected dataset is no longer currently executable; select it again.",
+                        },
+                    )
+                return self._outcome(
+                    "dynamic_anomaly_screen", "INVALID_DATASET_SELECTION", error={
+                        "code": "invalid_dynamic_dataset",
+                        "message": "Select an exact currently eligible registered dataset identifier.",
+                    },
+                )
+        else:
+            return self._outcome(
+                "dynamic_anomaly_screen", "CLARIFICATION_REQUIRED", error={
+                    "code": "dynamic_dataset_required",
+                    "message": "Select one exact eligible dataset before dynamic anomaly screening.",
+                    "choices": [item["dataset_id"] for item in datasets],
+                },
+            )
+
+        result = self._manager.execute_dataset_anomaly_request(
+            DynamicAnomalyRequest(target, operation),
+        )
+        context = self._capture_dynamic_evidence(result)
+        previous_operation = (
+            state.dynamic_dataset.last_operation
+            if state.dynamic_dataset is not None and state.dynamic_dataset.dataset_id == target
+            else None
+        )
+        self._replace_state(
+            context=context,
+            dynamic_dataset=DynamicDatasetContext(target, previous_operation),
+            last_activity_at=self._now(),
+        )
+        references = (
+            {"handle": item.handle, "kind": "ANOMALY_RECORD"}
+            for item in context.handles
+        ) if type(context) is EvidenceContext else ()
+        return self._outcome(
+            "dynamic_anomaly_screen", result["execution_status"], result,
+            references=references,
+        )
 
     def answer(self, choice):
         """Resolve only the current allowlisted clarification choice."""
@@ -646,6 +1038,47 @@ class FinancialManagerSession:
                 "code": "unsupported_follow_up",
                 "message": "Use why_selected or record_detail for an issued anomaly reference.",
             })
+        if context.operation is not None:
+            current = self._state.dynamic_dataset
+            if current is None or current.dataset_id != handle.dataset:
+                return self._outcome("follow_up", "STALE_REFERENCE", error={
+                    "code": "stale_reference",
+                    "message": "The candidate reference does not belong to the active dataset.",
+                })
+            catalog = self.dynamic_dataset_catalog(candidate_id=handle.dataset)
+            if all(item["dataset_id"] != handle.dataset for item in catalog["datasets"]):
+                return self._outcome("follow_up", "STALE_REFERENCE", error={
+                    "code": "stale_reference",
+                    "message": "The selected dataset is no longer currently executable.",
+                })
+            from src.anomaly.dynamic import DynamicAnomalyRequest
+            result = self._manager.execute_dataset_anomaly_request(
+                DynamicAnomalyRequest(handle.dataset, context.operation),
+            )
+            parts = self._dynamic_evidence_parts(result)
+            if parts is None:
+                return self._outcome("follow_up", "STALE_REFERENCE", error={
+                    "code": "stale_reference",
+                    "message": "The original evidence can no longer be reproduced.",
+                })
+            evidence, dataset, operation, measure, items, _candidates, binding, digest = parts
+            if (dataset != handle.dataset or operation != context.operation
+                    or measure != handle.measure or binding != handle.snapshot
+                    or digest != handle.result_digest):
+                return self._outcome("follow_up", "STALE_REFERENCE", error={
+                    "code": "stale_reference",
+                    "message": "The authoritative dataset or result no longer matches the reference.",
+                })
+            item = next((value for value in items
+                         if value.get("canonical_record_id") == handle.record_id), None)
+            if item is None or item.get("status") != "CANDIDATE":
+                return self._outcome("follow_up", "STALE_REFERENCE", error={
+                    "code": "stale_reference",
+                    "message": "The referenced candidate no longer resolves.",
+                })
+            detail = self._dynamic_followup_detail(evidence, item, binding, digest)
+            self._replace_state(context=context, last_activity_at=self._now())
+            return self._outcome("follow_up", "SUCCESS", detail)
         request = ANOMALY_REQUESTS[(handle.dataset, handle.measure)]
         result = self._manager.ask(request)
         parts = self._evidence_parts(result)
@@ -682,7 +1115,7 @@ class FinancialManagerSession:
                 "code": code,
                 "message": "The session is unavailable; no interaction remains to cancel.",
             })
-        self._replace_state(context=None, last_activity_at=self._now())
+        self._replace_state(context=None, dynamic_dataset=None, last_activity_at=self._now())
         return self._outcome("cancel", "CANCELLED")
 
     def reset(self):
@@ -703,6 +1136,7 @@ class FinancialManagerSession:
                 "inactivity_expires_at": None,
                 "absolute_expires_at": None,
                 "active_context": None,
+                "dynamic_dataset": None,
             }
         return {
             "conversation_version": state.schema_version,
@@ -713,4 +1147,8 @@ class FinancialManagerSession:
             "inactivity_expires_at": (state.last_activity_at + INACTIVITY_LIMIT).isoformat(),
             "absolute_expires_at": state.absolute_expires_at.isoformat(),
             "active_context": _context_dict(state.active_context),
+            "dynamic_dataset": ({
+                "dataset_id": state.dynamic_dataset.dataset_id,
+                "last_operation": state.dynamic_dataset.last_operation,
+            } if state.dynamic_dataset is not None else None),
         }

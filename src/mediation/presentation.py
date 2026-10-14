@@ -32,6 +32,33 @@ TEXTS = {
         "restate": (
             "I can't safely tell what that refers to. Please state the complete request, for "
             "example “total sales by country”."),
+        "dataset_selected": "Dataset selected for this local conversation.",
+        "dataset_selection_failed": "That dataset is not currently eligible for dynamic financial analysis.",
+        "dynamic_dataset": "Select one exact eligible dataset ID before analysis. Available IDs: {choices}",
+        "dynamic_mediation_unavailable": (
+            "The dynamic request was not executed because safe language mediation was unavailable. "
+            "The current dataset selection, if any, was left unchanged."),
+        "stale_dynamic_dataset": (
+            "The selected dynamic dataset is no longer current or executable. Select an exact "
+            "eligible dataset before continuing."),
+        "dynamic_anomaly_deferred": (
+            "Conversational anomaly screening for onboarded datasets is deferred to Step 68. "
+            "No dynamic anomaly screening was executed."),
+        "missing_confirmed_profit": (
+            "Profit anomaly screening is unavailable because no confirmed supplied Profit "
+            "measure is currently ready for this dataset."),
+        "missing_confirmed_sales": (
+            "Sales anomaly screening is unavailable because no confirmed supplied Sales "
+            "measure is currently ready for this dataset."),
+        "insufficient_numeric_records": (
+            "Anomaly screening is unavailable because the selected measure has too few usable "
+            "numeric records for the approved policy."),
+        "zero_iqr": (
+            "Anomaly screening is unavailable because the approved Tukey-IQR reference has a "
+            "zero interquartile range."),
+        "incompatible_currency": (
+            "Anomaly screening is unavailable because the dataset contains incompatible "
+            "confirmed currencies; no conversion was performed."),
         "CASH_FLOW_FORECASTING": (
             "Cash-flow forecasting is not available. The current data has no verified actual "
             "cash inflows or outflows, and its currency is not established; sales records are "
@@ -78,6 +105,33 @@ TEXTS = {
         "restate": (
             "Não consigo identificar com segurança a que isso se refere. Descreva o pedido "
             "completo, por exemplo “vendas totais por país”."),
+        "dataset_selected": "Dataset selecionado para esta conversa local.",
+        "dataset_selection_failed": "Esse dataset não está elegível agora para análise financeira dinâmica.",
+        "dynamic_dataset": "Selecione um ID exato de dataset elegível antes da análise. IDs disponíveis: {choices}",
+        "dynamic_mediation_unavailable": (
+            "O pedido dinâmico não foi executado porque a mediação segura de linguagem ficou "
+            "indisponível. A seleção atual, se existir, foi preservada."),
+        "stale_dynamic_dataset": (
+            "O dataset dinâmico selecionado não está mais atual ou executável. Selecione um "
+            "dataset elegível por seu ID exato antes de continuar."),
+        "dynamic_anomaly_deferred": (
+            "A triagem conversacional de anomalias para datasets incorporados foi adiada para o "
+            "Step 68. Nenhuma triagem dinâmica foi executada."),
+        "missing_confirmed_profit": (
+            "A triagem de anomalias de Lucro não está disponível porque nenhuma medida de Lucro "
+            "fornecida e confirmada está pronta neste dataset."),
+        "missing_confirmed_sales": (
+            "A triagem de anomalias de Vendas não está disponível porque nenhuma medida de Vendas "
+            "fornecida e confirmada está pronta neste dataset."),
+        "insufficient_numeric_records": (
+            "A triagem de anomalias não está disponível porque a medida selecionada tem poucos "
+            "registros numéricos utilizáveis para a política aprovada."),
+        "zero_iqr": (
+            "A triagem de anomalias não está disponível porque a referência Tukey-IQR aprovada "
+            "tem intervalo interquartil zero."),
+        "incompatible_currency": (
+            "A triagem de anomalias não está disponível porque o dataset contém moedas confirmadas "
+            "incompatíveis; nenhuma conversão foi realizada."),
         "CASH_FLOW_FORECASTING": (
             "Previsão de fluxo de caixa não está disponível. Os dados atuais não têm entradas e "
             "saídas de caixa efetivas verificadas, e a moeda não está estabelecida; registros de "
@@ -132,6 +186,9 @@ def _clarification_code(result):
 def bears_evidence(outcome):
     """True when a single authoritative result exists that may be verbalized."""
     result = outcome.get("result")
+    if outcome.get("operation") in {"dynamic_financial_analysis", "dynamic_anomaly_screen"}:
+        return (outcome.get("status") in EVIDENCE_STATUSES and type(result) is dict
+                and type(result.get("delegated_result")) is dict)
     if outcome["operation"] == "follow_up":
         return outcome["status"] == "SUCCESS" and type(result) is dict
     return (type(result) is dict and result.get("execution_status") in EVIDENCE_STATUSES
@@ -142,6 +199,16 @@ def outcome_text(outcome, language):
     """Deterministic wording for outcomes without evidence to explain."""
     result = outcome.get("result")
     status = outcome["status"]
+    if outcome.get("operation") in {"dynamic_financial_analysis", "dynamic_anomaly_screen"}:
+        error = outcome.get("error") or {}
+        if type(result) is dict:
+            errors = result.get("errors") or []
+            error = errors[0] if errors else error
+        code = error.get("code")
+        if (outcome.get("operation") == "dynamic_anomaly_screen"
+                and code in TEXTS[language]):
+            return text(language, code)
+        return text(language, "unsupported", message=error.get("message") or status)
     if type(result) is not dict or "routing" not in result:
         return text(language, status if status in TEXTS[language] else "session_error")
     if status == "CLARIFICATION_REQUIRED":
@@ -185,6 +252,7 @@ LABELS = {
         "notes": "Notes:",
         "currency": ("Currency: UNKNOWN. The source denomination is not established, so values are "
                      "not labelled with any currency."),
+        "currency_confirmed": "Currency: CONFIRMED ({code}), copied from approved dataset evidence.",
         "coverage": "Coverage: {used} of {candidates} records used; {excluded} excluded ({reasons}).",
         "missing_dimension": ("{count} records have no {grouping} value in the source; they appear as "
                               "“(value missing in source)”."),
@@ -220,6 +288,7 @@ LABELS = {
         "notes": "Notas:",
         "currency": ("Moeda: UNKNOWN. A denominação da fonte não está estabelecida; os valores não são "
                      "atribuídos a nenhuma moeda."),
+        "currency_confirmed": "Moeda: CONFIRMED ({code}), copiada da evidência aprovada do dataset.",
         "coverage": "Cobertura: {used} de {candidates} registros usados; {excluded} excluídos ({reasons}).",
         "missing_dimension": ("{count} registros não têm valor de {grouping} na fonte; aparecem como "
                               "“(valor ausente na fonte)”."),
@@ -405,14 +474,47 @@ def _screening(view, hint, language, labels):
     return lines
 
 
+def _dynamic_screening(view, hint, language, labels):
+    evidence = view.evidence
+    candidates = grounding.dynamic_screening_candidates(evidence)
+    refs = list(labels) if labels else ["—"] * min(len(candidates), MAX_REFERENCE_LABELS)
+    rows = [[
+        ref, str(item["source_row_number"]), grouped(item.get("observed_value"), language),
+        _assessment_cell(item, language),
+    ] for ref, item in zip(refs, candidates)]
+    counts = evidence["result"]["counts"]
+    lines = [(
+        f"Global screening: {grouped(counts['candidate'], language)} CANDIDATE, "
+        f"{grouped(counts['not_selected'], language)} NOT_SELECTED, "
+        f"{grouped(counts['not_assessed'], language)} NOT_ASSESSED."
+        if language == "en" else
+        f"Triagem global: {grouped(counts['candidate'], language)} CANDIDATE, "
+        f"{grouped(counts['not_selected'], language)} NOT_SELECTED, "
+        f"{grouped(counts['not_assessed'], language)} NOT_ASSESSED."
+    )]
+    if not rows:
+        return lines
+    headers = [label(language, key) for key in ("ref", "row", "value", "global")]
+    if hint == "TABLE":
+        lines.append(_table(headers, rows, {1, 2}))
+    elif hint == "LIST":
+        lines.extend(
+            f"- {row[0]}: {headers[1]} {row[1]}; {headers[2]} {row[2]}; "
+            f"{headers[3]} {row[3]}" for row in rows
+        )
+    lines.append(label(language, "candidates_shown", shown=len(rows), total=counts["candidate"]))
+    return lines
+
+
 def _followup(view, language):
     detail = view.detail
     peers = "; ".join(f"{name(language, key)} {value.get('value') if type(value) is dict else value}"
                       for key, value in (detail.get("peer_values") or {}).items())
     lines = [f"- {label(language, 'row')}: {detail['lineage']['source_row_number']}",
              f"- {label(language, 'observed', measure=name(language, detail['measure']))}: "
-             f"{grouped(detail.get('observed_value'), language)}",
-             f"- {label(language, 'peer_group')}: {peers}"]
+             f"{grouped(detail.get('observed_value'), language)}"]
+    if peers:
+        lines.append(f"- {label(language, 'peer_group')}: {peers}")
     for mode, entry in detail["assessments"].items():
         assessment, reference = entry["assessment"], entry.get("reference") or {}
         heading = label(language, "assessment", mode=name(language, mode))
@@ -441,6 +543,8 @@ def structured(view, hint, language, labels=()):
         return _summary(view, language)
     if view.kind == "screening":
         return _screening(view, hint, language, labels)
+    if view.kind == "dynamic_screening":
+        return _dynamic_screening(view, hint, language, labels)
     if view.kind == "followup":
         return _followup(view, language)
     return []
@@ -452,6 +556,11 @@ def notes(view, language, labels=()):
     lines = []
     if grounding.currency_status(view) == "UNKNOWN":
         lines.append(label(language, "currency"))
+    elif grounding.currency_status(view) == "CONFIRMED":
+        currency = view.evidence.get("currency") or {}
+        code = currency.get("code")
+        if type(code) is str and code:
+            lines.append(label(language, "currency_confirmed", code=code))
     records = evidence.get("records") or {}
     if records.get("excluded"):
         reasons = ", ".join(f"{_reason(language, reason)}: {count}"
@@ -464,7 +573,7 @@ def notes(view, language, labels=()):
         if missing:
             lines.append(label(language, "missing_dimension", count=grouped(missing, language),
                                grouping=name(language, view.grouping or "group").casefold()))
-    if view.kind in ("screening", "followup"):
+    if view.kind in ("screening", "dynamic_screening", "followup"):
         lines.append(label(language, "candidate"))
         lines.append(label(language, "not_assessed_note"))
     fields = []
@@ -476,7 +585,7 @@ def notes(view, language, labels=()):
             fields.append(field)
     if fields:
         lines.append(label(language, "disclosures", fields=", ".join(fields)))
-    if view.kind == "screening" and labels:
+    if view.kind in ("screening", "dynamic_screening") and labels:
         lines.append(label(language, "follow_hint"))
     return lines
 
@@ -495,3 +604,30 @@ def compose(view, message, language, *, hint, labels=(), interpreted=None, refer
         footer.append(label(language, "interpreted", request=interpreted))
     parts.append("\n".join(footer))
     return "\n\n".join(parts)
+
+
+def deterministic_dynamic(view, language):
+    """Code-rendered fallback for dynamic evidence; every displayed value is copied."""
+    anomaly = view.kind == "dynamic_screening"
+    message = (
+        ("Dynamic anomaly screening completed from authoritative evidence."
+         if anomaly else "Dynamic financial analysis completed from authoritative evidence.")
+        if language == "en" else
+        ("A triagem dinâmica de anomalias foi concluída com evidência autoritativa."
+         if anomaly else "A análise financeira dinâmica foi concluída com evidência autoritativa.")
+    )
+    if view.kind == "count":
+        value = grouped(view.evidence["result"]["record_count"], language)
+        body = f"- {label(language, 'record_count')}: {value}"
+        footer = [label(language, "notes"), *(
+            "- " + line for line in notes(view, language)
+        )]
+        return "\n\n".join((message, body, "\n".join(footer)))
+    return compose(view, message, language, hint=PRESENTATION_DEFAULTS[view.kind])
+
+
+PRESENTATION_DEFAULTS = {
+    "summary": "LIST", "groups": "TABLE", "records": "TABLE",
+    "screening": "TABLE", "followup": "LIST",
+    "dynamic_screening": "TABLE",
+}

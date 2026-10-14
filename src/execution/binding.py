@@ -8,6 +8,7 @@ from typing import Any, Callable
 from src.financial.models import envelope
 from src.onboarding.models import OnboardingError
 from src.onboarding.registry import DatasetRegistry, re_dataset_id
+from src.dynamic_financial import DYNAMIC_GROUPED_OPERATIONS
 
 from .models import (
     AdapterExecutionRequest,
@@ -226,13 +227,7 @@ class DynamicQueryBinder:
         if required_roles is None:
             return _result(BindingOutcome.UNSUPPORTED_OPERATION)
         raw_policy = request.parameters.missing_dimension
-        grouped_operations = {
-            SalesRecordOperation.SALES_BY_COUNTRY,
-            SalesRecordOperation.SALES_BY_PERIOD,
-            SalesRecordOperation.SALES_BY_SEGMENT,
-            SalesRecordOperation.SALES_BY_PRODUCT,
-        }
-        if operation in grouped_operations:
+        if operation.value in DYNAMIC_GROUPED_OPERATIONS:
             raw_policy = MissingDimensionPolicy.BUCKET if raw_policy is None else raw_policy
             policy = (
                 raw_policy if isinstance(raw_policy, MissingDimensionPolicy)

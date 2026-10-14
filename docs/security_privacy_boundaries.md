@@ -245,3 +245,43 @@ No forecasting, RAG, embeddings, vector store, external database, ML algorithm o
 live FX was introduced. Existing financial/data readiness limits remain.
 
 See [Step 19 validation](step19_validation.md) for tests, review and file integrity.
+
+## Phase 17 conversational dynamic dataset boundary
+
+The Manager builds a maximum-20 interpretation catalog from authenticated
+current registry IDs. Each entry contains only opaque ID, approved domain,
+current Financial Analysis state and supported closed operation identifiers.
+Source paths/filenames, rows, financial values, samples, profiles, mappings and
+raw registry artifacts are excluded. An exact ID in user text receives a
+reserved catalog slot; malformed, multiple, unknown, omitted and model-invented
+IDs cannot become authority.
+
+The session stores one ID and one last successful operation in process memory.
+It is cleared by cancel/reset/expiry, never crosses sessions and is revalidated
+before use. Execution constructs only `DynamicQueryRequest` and delegates to the
+existing Manager/binder/static-adapter/Core chain. There is no new SQL, shell,
+subprocess, dynamic import, runtime code generation, untrusted `getattr`,
+caller-selected adapter, telemetry or persistence.
+
+Provider text cannot redirect a dynamic target to a legacy dataset. Provider
+failure with a dynamic target performs no financial execution; deterministic
+legacy fallback remains unchanged when no dynamic target exists. Dynamic anomaly
+requests return a code-owned Step-68 deferral and do not call the Phase 16 typed
+anomaly execution seam.
+
+## Phase 17 dynamic anomaly conversation boundary
+
+Steps 68–69 replace only that anomaly deferral. The safe catalog adds anomaly
+state and supported operation identifiers, never rows, samples, paths, columns,
+values or raw readiness artifacts. The provider may propose only one of two
+GLOBAL operation keys; code constructs the typed request and current readiness
+still controls execution.
+
+Candidate labels are opaque A1–A10 navigation aliases over session-local handles.
+Handles bind the exact session, dataset, operation, canonical candidate record,
+lineage digest and semantic result digest. Follow-up re-executes current evidence
+and exposes a bounded relevant-measure projection only. Cross-session/dataset,
+invented and stale references fail closed. Source/user prompt injection cannot
+turn labels, headers or values into instructions. No new persistence, telemetry,
+network, SQL, shell, subprocess, runtime import/code generation or arbitrary row
+retrieval surface is introduced.

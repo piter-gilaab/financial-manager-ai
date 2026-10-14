@@ -3,7 +3,6 @@
 from collections import Counter
 from dataclasses import dataclass
 from decimal import DecimalException
-from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -11,14 +10,10 @@ from src.execution.models import AdapterOutcome
 from src.execution.sales_record import SalesRecordExecutionAdapter
 from src.financial.arithmetic import canonical_decimal, exact_context
 from src.financial.models import ContractError, arithmetic_metadata, envelope
+from src.dynamic_anomaly import DynamicAnomalyOperation
 
 from .baseline import MINIMUM_SIZE, assessment, reference
 from .models import DynamicAnomalyAssessment, DynamicAnomalyScreeningResult
-
-
-class DynamicAnomalyOperation(str, Enum):
-    SALES_ANOMALY_SCREEN = "SALES_ANOMALY_SCREEN"
-    PROFIT_ANOMALY_SCREEN = "PROFIT_ANOMALY_SCREEN"
 
 
 @dataclass(frozen=True, slots=True)

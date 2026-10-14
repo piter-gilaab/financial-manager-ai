@@ -21,6 +21,7 @@ PRESENTATIONS = {
     "count": ("TEXT",), "summary": ("LIST", "TEXT"), "groups": ("TABLE", "LIST", "TEXT"),
     "records": ("TABLE", "TEXT"), "screening": ("TABLE", "LIST", "TEXT"),
     "followup": ("LIST", "TEXT"),
+    "dynamic_screening": ("TABLE", "LIST", "TEXT"),
 }
 # Worded so a model can echo it safely: the required disclaimers are appended by code.
 TERMINOLOGY = (
@@ -55,6 +56,34 @@ def _decimal(value):
 def locate(outcome):
     """Return an EvidenceView for supported single results, or None (deterministic fallback)."""
     result = outcome.get("result")
+    if outcome.get("operation") == "dynamic_financial_analysis":
+        evidence = result.get("delegated_result") if type(result) is dict else None
+        body = evidence.get("result") if type(evidence) is dict else None
+        if type(body) is not dict:
+            return None
+        query = evidence.get("query_name", "")
+        if "groups" in body:
+            grouping = next((name for name in GROUPINGS if query.endswith("_" + name.upper())), None)
+            if query == "SALES_BY_PERIOD":
+                grouping = "period"
+            return EvidenceView("groups", "FINANCIAL_ANALYSIS", evidence["dataset"], evidence,
+                                grouping=grouping)
+        if "measures" in body:
+            return EvidenceView("summary", "FINANCIAL_ANALYSIS", evidence["dataset"], evidence)
+        if "record_count" in body:
+            return EvidenceView("count", "FINANCIAL_ANALYSIS", evidence["dataset"], evidence)
+        return None
+    if outcome.get("operation") == "dynamic_anomaly_screen":
+        evidence = result.get("delegated_result") if type(result) is dict else None
+        body = evidence.get("result") if type(evidence) is dict else None
+        if (type(body) is dict and body.get("scope") == "GLOBAL"
+                and body.get("operation") in {
+                    "SALES_ANOMALY_SCREEN", "PROFIT_ANOMALY_SCREEN",
+                }):
+            return EvidenceView(
+                "dynamic_screening", "ANOMALY_DETECTION", body["dataset_id"], evidence,
+            )
+        return None
     if outcome.get("operation") == "follow_up":
         if type(result) is dict and result.get("reference_type") == "ANOMALY_RECORD":
             return EvidenceView("followup", "ANOMALY_DETECTION", result["dataset"], result, detail=result)
@@ -109,6 +138,9 @@ def quality_warnings(view):
 def currency_status(view):
     """Read from evidence: the envelope, or the follow-up's own currency disclosure."""
     if view.kind == "followup":
+        currency = view.detail.get("currency")
+        if type(currency) is dict:
+            return currency.get("status")
         codes = {warning.get("code") for warning in quality_warnings(view)}
         return "UNKNOWN" if "currency_unknown" in codes else None
     currency = view.evidence.get("currency")
@@ -141,6 +173,12 @@ def screening_candidates(evidence):
     return [item for item in evidence["result"]["items"]
             if any(assessment.get("status") == "CANDIDATE"
                    for assessment in item["assessments"].values())]
+
+
+def dynamic_screening_candidates(evidence):
+    """Dynamic GLOBAL candidates in deterministic adapter evidence order."""
+    return [item for item in evidence["result"]["assessments"]
+            if item.get("status") == "CANDIDATE"]
 
 
 class _Catalog:
@@ -302,6 +340,28 @@ def build_packet(view, *, language, question, interpreted, labels=()):
                          "result.items[]", reference_label=label)
         _coverage(catalog, body)
         _records(catalog, evidence)
+    elif view.kind == "dynamic_screening":
+        body = evidence["result"]
+        measure = body["measure"].casefold()
+        for status in ("candidate", "not_selected", "not_assessed"):
+            catalog.fact(
+                f"global screening {status.upper()} records", body["counts"][status],
+                "records", "count", f"result.counts.{status}",
+            )
+        method = (evidence.get("metadata") or {}).get("method") or {}
+        catalog.fact("IQR fence multiplier", method.get("multiplier"), "multiplier",
+                     "method", "metadata.method")
+        catalog.fact("Minimum numeric records per reference",
+                     method.get("minimum_numeric_records"), "records", "method",
+                     "metadata.method")
+        for label, item in zip(labels, dynamic_screening_candidates(evidence)):
+            catalog.fact(
+                f"{label}: source row {item['source_row_number']}; "
+                f"global {_assessment_text(item)}",
+                item.get("observed_value"), _unit(evidence, "monetary"),
+                "observed_value", "result.assessments[]", reference_label=label,
+            )
+        _records(catalog, evidence)
     else:  # followup
         detail = view.detail
         measure = detail["measure"].replace("_", " ")
@@ -325,6 +385,10 @@ def build_packet(view, *, language, question, interpreted, labels=()):
             for field in ("q1", "q3", "iqr", "lower_fence", "upper_fence"):
                 catalog.fact(f"{mode} reference {field}", reference.get(field), unit, "statistic",
                              f"assessments.{mode}.reference.{field}")
+        policy = detail.get("policy") or {}
+        catalog.fact("Screening policy", policy.get("name"), "policy", "method", "policy.name")
+        catalog.fact("Screening policy version", policy.get("version"), "version", "method",
+                     "policy.version")
 
     _warnings(catalog, view)
     allowed = PRESENTATIONS[view.kind]

@@ -106,6 +106,20 @@ class DatasetRegistry:
             _atomic_json(target, mapping.to_dict())
         return target
 
+    def current_dataset_ids(self) -> tuple[str, ...]:
+        """Return only syntactically valid current registry identifiers, in stable order."""
+        directory = self.root / "registry"
+        try:
+            candidates = tuple(directory.iterdir())
+        except (FileNotFoundError, OSError):
+            return ()
+        return tuple(sorted(
+            item.name for item in candidates
+            if (re_dataset_id(item.name) and not item.is_symlink() and item.is_dir()
+                and not (item / "current.json").is_symlink()
+                and (item / "current.json").is_file())
+        ))
+
     def save_workflow(self, state: dict[str, Any]) -> None:
         dataset_id = state.get("dataset_id")
         if not re_dataset_id(dataset_id):

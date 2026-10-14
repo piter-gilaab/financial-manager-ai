@@ -163,10 +163,10 @@ Manager does not calculate thresholds or classifications. Its statistical
 presentation and the complete delegated evidence remain distinct from the
 legacy/global Anomaly Detection capability status.
 
-Dynamic candidate references are preserved in the explicit response, but the
-legacy conversational session follow-up mechanism is not extended: it depends
-on the legacy evidence schema and natural-language re-execution. No anomaly
-execution CLI or conversational dataset-discovery route is introduced.
+At the Step 64 checkpoint, dynamic candidate references were preserved in the
+explicit response but the conversational session follow-up mechanism was not yet
+extended. Phase 17 Steps 68–69 supersede that historical limitation with bounded
+fresh-evidence dynamic follow-up. No anomaly execution CLI is introduced.
 
 ### Status mapping
 
@@ -232,6 +232,28 @@ deterministic capability routing; explicit execution never reroutes requests.
 and controlled error boundaries. [Step 20](cli_workflow.md) now supplies the CLI,
 validated by [Step 21 acceptance](v1_acceptance.md). There is no server, API,
 web frontend, forecasting/RAG implementation or deployment.
+
+## Phase 17 Steps 66–67 conversational dataset mediation
+
+`dynamic_dataset_catalog()` adds a bounded safe projection used only for
+conversation: at most 20 exact current eligible `SALES_RECORD` IDs, approved
+domain, state and supported operation identifiers. It exposes no source metadata
+or values. `FinancialManagerSession` resolves only an exact user target or a
+fresh current selection and calls the existing `execute_dataset_request`; the Manager still
+does not parse conversational language or calculate financial values.
+
+The catalog is selection metadata, not a readiness token. Session use refreshes
+it and `execute_dataset_request` continues through current readiness, binder,
+adapter and Core validation. `execute_dataset_anomaly_request` is deliberately
+absent from this conversational dispatch until Step 68.
+
+Steps 68–69 add the conversation call to the already-existing
+`execute_dataset_anomaly_request` seam without changing its request, readiness,
+delegation or response contract. The session constructs only
+`DynamicAnomalyRequest` with one of the two closed operation keys. Follow-up
+re-executes that same Manager method and verifies authoritative lineage/evidence;
+the Manager still performs no language interpretation and the mediator performs
+no anomaly arithmetic or classification.
 
 See [Step 17 validation](step17_validation.md) for exact tests and protected-file
 checks. Breaking changes to the facade's envelope or delegation semantics require

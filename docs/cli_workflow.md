@@ -165,7 +165,29 @@ or expose candidates. Forecasting and Document Retrieval retain their blockers.
 There is no `dataset analyze` or anomaly execution CLI. Explicit execution uses
 the typed Python methods `FinancialManagerAgent.execute_dataset_request` for
 Financial Analysis and `execute_dataset_anomaly_request` for the Phase 16 closed
-anomaly catalog. Natural-language and fuzzy dataset selection remain unavailable.
+anomaly catalog. At the Phase 16 boundary, natural-language and fuzzy dataset
+selection were unavailable; the following Phase 17 addendum supersedes only the
+natural-language statement.
+
+Phase 17 Steps 66–67 change only mediated `chat`: a user may say `Use dataset
+ds_…` and then request one of the nine fixed dynamic Financial Analysis
+operations, or include the exact ID in the analysis turn. The ID must be a
+current eligible catalog entry; filenames, paths, recency and fuzzy matching are
+not accepted. `/status` shows only the opaque selected ID and last closed dynamic
+operation. `/cancel`, `/reset` and expiry clear them.
+
+Dynamic chat reuses `execute_dataset_request`; it adds no `dataset analyze`
+subcommand. `MONTH|YEAR` and `BUCKET|EXCLUDE` are the only optional parameters.
+Ambiguous datasets and unsupported follow-ups ask for clarification. At the
+Steps 66–67 checkpoint, dynamic anomaly requests were deferred and executed
+nothing; the Steps 68–69 behavior below supersedes that historical boundary.
+
+Steps 68–69 supersede that final deferral: mediated `chat` may request only the
+existing GLOBAL Sales or Profit anomaly screen. Candidate results use A1–A10 in
+natural conversation and the existing opaque `/follow` command remains valid.
+The feature adds no `dataset analyze` or anomaly execution subcommand. Readiness,
+Tukey-IQR computation, candidate classification and fresh evidence resolution
+remain in the existing deterministic Manager/adapter path.
 
 ## Output and application outcomes
 

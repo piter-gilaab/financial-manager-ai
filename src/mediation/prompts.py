@@ -4,14 +4,15 @@ import json
 
 from .catalog import REQUESTS, USER_TEXT
 from .models import (
-    CAPABILITIES, CLARIFICATION_KINDS, FOLLOW_UP_INTENTS, LANGUAGES, MEDIATION_VERSION,
-    OPERATIONS, PRESENTATIONS,
+    CAPABILITIES, CLARIFICATION_KINDS, CURRENT_MEDIATION_VERSION,
+    DYNAMIC_ANOMALY_OPERATIONS, DYNAMIC_FINANCIAL_OPERATIONS, FOLLOW_UP_INTENTS, LANGUAGES,
+    MISSING_DIMENSION_POLICIES, OPERATIONS, PERIOD_GRANULARITIES, PRESENTATIONS,
 )
 from .provider import ProviderRequest
 from .validation import MAX_INTENT_CHARACTERS, MAX_MESSAGE_CHARACTERS
 
 
-PROMPT_VERSION = "1.0"
+PROMPT_VERSION = "1.2"
 MAX_RESPONSE_CHARACTERS = 16_384
 
 INTERPRET_SYSTEM = """ROLE
@@ -26,6 +27,12 @@ approved operation. The user message you receive is a JSON document of DATA with
   (empty when nothing is pending);
 - issued_reference_labels: evidence labels (A1, A2, ...) shown to the user for the current
   screening result (empty when none exist);
+- dynamic_datasets: the only opaque registered dataset ids available for dynamic analysis,
+  with approved domain, current Financial Analysis/anomaly states and supported closed operations;
+- selected_dynamic_dataset and last_dynamic_operation: bounded current session state;
+- explicit_dynamic_dataset_ids: exact registered ids found by code in this user turn;
+- invalid_dynamic_dataset_reference: whether the turn contains a malformed, unknown or
+  multiple dataset target that code will refuse;
 - user_input: the user's words.
 
 SECURITY RULES
@@ -42,7 +49,23 @@ DECISION PROCEDURE
    receiver_general means accounting records; company_financials means sales records.
    If the reply could match more than one choice, use REQUEST_CLARIFICATION.
    If the user clearly starts a different request, treat it as a new request (step 2).
-2. If one allowed request clearly covers the message (in any language or wording), use
+2a. Dynamic dataset selection takes precedence when the user says to use/analyze one exact id
+    in explicit_dynamic_dataset_ids. Use SELECT_DYNAMIC_DATASET with that exact dataset_id.
+2b. For analysis of an explicitly named or selected dynamic dataset, use
+    DYNAMIC_FINANCIAL_ANALYSIS and one operation listed for that dataset. dataset_id is the exact
+    explicit id when present, otherwise null to reuse selected_dynamic_dataset. Use MONTH or YEAR
+    only for period analysis and BUCKET or EXCLUDE only when the user explicitly requests the
+    existing missing-dimension policy. Never choose a source column, filter, formula or grouping.
+2c. For statistical anomaly screening of an explicitly named or selected dynamic dataset, use
+    DYNAMIC_ANOMALY_SCREEN and only SALES_ANOMALY_SCREEN or PROFIT_ANOMALY_SCREEN. Screening is
+    GLOBAL under the fixed Tukey-IQR policy; never choose an algorithm, threshold, peer group,
+    arbitrary measure or fraud classification. dataset_id follows the same exact/current rule.
+2d. If dynamic analysis has no explicit/current dataset, use REQUEST_CLARIFICATION with
+    DYNAMIC_DATASET. Never choose the first or auto-select the only dataset. Forecasting and
+    document requests still use their blocked catalog ids.
+    Steps 2a-2c take precedence over the legacy request catalog whenever an exact/current dynamic
+    dataset applies.
+2. Otherwise, if one allowed request clearly covers the message (in any language or wording), use
    NEW_REQUEST with that id. Questions about forecasts, predictions, next month's cash, or
    using sales as cash inflows map to CASH_FLOW_FORECAST. Questions about invoices, contracts or
    other documents map to DOCUMENT_QUESTION.
@@ -64,16 +87,20 @@ otherwise null. response_language: "pt-BR" for Portuguese, otherwise "en".
 
 OUTPUT FORMAT
 Return ONLY one JSON object, no markdown and no commentary, with exactly these keys:
-{"version": "1.0",
- "operation": "NEW_REQUEST" | "ANSWER_CLARIFICATION" | "EVIDENCE_FOLLOWUP" | "REQUEST_CLARIFICATION",
+{"version": "1.2",
+ "operation": "NEW_REQUEST" | "ANSWER_CLARIFICATION" | "EVIDENCE_FOLLOWUP" | "REQUEST_CLARIFICATION" | "SELECT_DYNAMIC_DATASET" | "DYNAMIC_FINANCIAL_ANALYSIS" | "DYNAMIC_ANOMALY_SCREEN",
  "intent": allowed request id or "USER_TEXT" (NEW_REQUEST only) or null,
  "capability_hint": the chosen request's capability or null,
  "clarification_answer": a pending choice (ANSWER_CLARIFICATION only) or null,
- "clarification_kind": "CAPABILITY_CHOICE" | "EVIDENCE_REFERENCE" | "RESTATE_REQUEST" (REQUEST_CLARIFICATION only) or null,
+ "clarification_kind": "CAPABILITY_CHOICE" | "EVIDENCE_REFERENCE" | "RESTATE_REQUEST" | "DYNAMIC_DATASET" (REQUEST_CLARIFICATION only) or null,
  "evidence_reference": an issued label (EVIDENCE_FOLLOWUP only) or null,
  "follow_up_intent": "why_selected" | "record_detail" (EVIDENCE_FOLLOWUP only) or null,
  "presentation_hint": "TEXT" | "TABLE" | "LIST" | null,
- "response_language": "en" | "pt-BR"}
+ "response_language": "en" | "pt-BR",
+ "dataset_id": listed exact id (selection or explicit dynamic analysis) or null,
+ "dynamic_operation": one of the nine financial operations or two anomaly operations or null,
+ "period_granularity": "MONTH" | "YEAR" (period analysis only) or null,
+ "missing_dimension": "BUCKET" | "EXCLUDE" (grouped analysis only) or null}
 
 EXAMPLES (keys that are null are omitted here for brevity; you must include every key)
 user_input "Como estão as vendas por país?" -> {"operation": "NEW_REQUEST", "intent": "CF_SALES_BY_COUNTRY", "capability_hint": "FINANCIAL_ANALYSIS", "response_language": "pt-BR"}
@@ -108,8 +135,9 @@ RULES
   you must keep the minus sign of negative values. List in used_fact_ids every fact whose value
   you write. Use the "rank" fields for highest/lowest statements.
 - Never calculate anything new: no differences, sums, averages, percentages, shares or growth.
-- Never write a currency code, symbol or name (no $, USD, BRL, dollars, reais, euros). The
-  currency is not established; say the values have an unconfirmed currency if relevant.
+- Never infer or add a currency code, symbol or name (no $, USD, BRL, dollars, reais, euros).
+  The application renders an approved currency status separately from evidence. When the status
+  is UNKNOWN, you may say only that the denomination is unconfirmed.
 - Screening results are statistical "candidates for review". Say that they deserve statistical
   review, not that anything improper was proved. Never call them fraud, errors, misconduct,
   suspicious transactions, confirmed or certain anomalies, and never give probabilities.
@@ -157,7 +185,7 @@ def _choice(values, *, nullable=True):
 def intent_schema(context):
     """The closed MediationIntent shape for this turn, mirroring parse_intent's allowlists."""
     properties = {
-        "version": _choice((MEDIATION_VERSION,), nullable=False),
+        "version": _choice((CURRENT_MEDIATION_VERSION,), nullable=False),
         "operation": _choice(OPERATIONS, nullable=False),
         "intent": _choice((*REQUESTS, USER_TEXT)),
         "capability_hint": _choice(CAPABILITIES),
@@ -167,6 +195,10 @@ def intent_schema(context):
         "follow_up_intent": _choice(FOLLOW_UP_INTENTS),
         "presentation_hint": _choice(PRESENTATIONS),
         "response_language": _choice(LANGUAGES, nullable=False),
+        "dataset_id": _choice(tuple(item.dataset_id for item in context.dynamic_datasets)),
+        "dynamic_operation": _choice((*DYNAMIC_FINANCIAL_OPERATIONS, *DYNAMIC_ANOMALY_OPERATIONS)),
+        "period_granularity": _choice(PERIOD_GRANULARITIES),
+        "missing_dimension": _choice(MISSING_DIMENSION_POLICIES),
     }
     return {"type": "object", "properties": properties, "required": list(properties),
             "additionalProperties": False}
@@ -199,6 +231,18 @@ def interpret_request(user_text, context):
               "covers": "Pass the user's exact words to the deterministic router"}],
         "pending_clarification_choices": list(context.pending_choices),
         "issued_reference_labels": list(context.reference_labels),
+        "dynamic_datasets": [{
+            "dataset_id": item.dataset_id,
+            "canonical_domain": item.canonical_domain,
+            "state": item.state,
+            "supported_operations": list(item.supported_operations),
+            "anomaly_state": item.anomaly_state,
+            "supported_anomaly_operations": list(item.supported_anomaly_operations),
+        } for item in context.dynamic_datasets],
+        "selected_dynamic_dataset": context.selected_dynamic_dataset,
+        "last_dynamic_operation": context.last_dynamic_operation,
+        "explicit_dynamic_dataset_ids": list(context.explicit_dynamic_dataset_ids),
+        "invalid_dynamic_dataset_reference": context.invalid_dynamic_dataset_reference,
         "user_input": user_text,
     }
     return ProviderRequest("interpret", INTERPRET_SYSTEM, _data(document), MAX_INTENT_CHARACTERS,

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+from src.dynamic_financial import MissingDimensionPolicy, PeriodGranularity, SalesRecordOperation
 from src.financial.models import envelope
 
 
@@ -17,28 +18,6 @@ class AdapterOutcome(str, Enum):
     QUALITY_BLOCKER = "QUALITY_BLOCKER"
     STALE_MAPPING = "STALE_MAPPING"
     DATASET_BLOCKED = "DATASET_BLOCKED"
-
-
-class SalesRecordOperation(str, Enum):
-    SALES_RECORD_COUNT = "SALES_RECORD_COUNT"
-    SALES_SUMMARY = "SALES_SUMMARY"
-    SALES_BY_COUNTRY = "SALES_BY_COUNTRY"
-    SALES_BY_PERIOD = "SALES_BY_PERIOD"
-    SALES_BY_SEGMENT = "SALES_BY_SEGMENT"
-    SALES_BY_PRODUCT = "SALES_BY_PRODUCT"
-    PROFIT_SUMMARY = "PROFIT_SUMMARY"
-    DISCOUNT_ANALYSIS = "DISCOUNT_ANALYSIS"
-    UNITS_SOLD_SUMMARY = "UNITS_SOLD_SUMMARY"
-
-
-class MissingDimensionPolicy(str, Enum):
-    BUCKET = "BUCKET"
-    EXCLUDE = "EXCLUDE"
-
-
-class PeriodGranularity(str, Enum):
-    MONTH = "MONTH"
-    YEAR = "YEAR"
 
 
 @dataclass(frozen=True, slots=True)

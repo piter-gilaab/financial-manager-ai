@@ -1,18 +1,25 @@
 """Natural language -> validated intent -> one existing session operation -> grounded presentation."""
 
 from dataclasses import dataclass
+import re
 
 from src.agents.provider import ProviderLocation
+from src.dynamic_anomaly import DYNAMIC_ANOMALY_OPERATIONS
 
 from .catalog import CAPABILITY_CLARIFICATION_REQUEST
 from .grounding import build_packet, locate
-from .models import REFERENCE_LABELS, InterpretationContext
-from .presentation import EVIDENCE_STATUSES, FALLBACK_NOTICE, bears_evidence, compose, outcome_text, text
+from .models import DynamicDatasetOption, REFERENCE_LABELS, InterpretationContext
+from .presentation import (
+    EVIDENCE_STATUSES, FALLBACK_NOTICE, bears_evidence, compose, deterministic_dynamic,
+    outcome_text, text,
+)
 from .prompts import interpret_request, respond_request
 from .validation import parse_intent, validate_natural_response
 
 
 MAX_MEDIATED_INPUT_CHARACTERS = 2_000
+DATASET_ID = re.compile(r"(?<![A-Za-z0-9_/\\])ds_[0-9a-f]{20}(?![A-Za-z0-9_/\\])")
+DATASET_TOKEN = re.compile(r"(?<![A-Za-z0-9_])ds_[^\s,;]+")
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,16 +62,93 @@ class ConversationMediator:
         pending = _pending_choices(status)
         replaced = bool(pending)
         labels = self._current_labels(status)
-        context = InterpretationContext(pending, tuple(label for label, _ in labels))
+        exact_ids = tuple(dict.fromkeys(DATASET_ID.findall(user_text))) if type(user_text) is str else ()
+        dataset_tokens = tuple(DATASET_TOKEN.findall(user_text)) if type(user_text) is str else ()
+        normalized_tokens = tuple(
+            item.rstrip(".,;:!?)]}\"'") for item in dataset_tokens
+        )
+        catalog = self._session.dynamic_dataset_catalog(
+            candidate_id=exact_ids[0] if len(exact_ids) == 1 else None,
+        )
+        options = tuple(DynamicDatasetOption(
+            item["dataset_id"], item["canonical_domain"], item["state"],
+            tuple(item["supported_operations"]),
+            item.get("anomaly_state"), tuple(item.get("supported_anomaly_operations", ())),
+        ) for item in catalog["datasets"])
+        available_ids = {item.dataset_id for item in options}
+        dynamic = status.get("dynamic_dataset") or {}
+        had_dynamic_selection = dynamic.get("dataset_id") is not None
+        selected = dynamic.get("dataset_id")
+        if selected not in available_ids:
+            selected = None
+        explicit_ids = tuple(item for item in exact_ids if item in available_ids)
+        context = InterpretationContext(
+            pending,
+            tuple(label for label, _ in labels),
+            options,
+            selected,
+            dynamic.get("last_operation") if selected is not None else None,
+            explicit_ids,
+            bool(
+                dataset_tokens and (
+                    len(exact_ids) != 1
+                    or len(explicit_ids) != 1
+                    or any(item != exact_ids[0] for item in normalized_tokens)
+                )
+                or catalog.get("stale_selection_cleared") and not explicit_ids
+            ),
+        )
         proposal = self._interpret(user_text, context)
         if proposal is None:
+            if had_dynamic_selection or dataset_tokens:
+                return MediatedTurn(
+                    None,
+                    text("pt-BR" if _looks_portuguese(user_text) else "en",
+                         "dynamic_mediation_unavailable"),
+                    FALLBACK_NOTICE,
+                    replaced,
+                )
             outcome = self._session.new_request(user_text)
             return MediatedTurn(outcome, None, FALLBACK_NOTICE, replaced, self._remember(outcome))
         turn = _Turn(user_text, proposal.response_language, proposal.presentation_hint)
 
+        # A model cannot silently reinterpret an explicit/current dynamic target as a
+        # legacy dataset request. Legacy requests remain available when named explicitly.
+        request = proposal.request
+        dynamic_targeted = had_dynamic_selection or selected is not None or bool(exact_ids)
+        explicit_legacy = _explicit_legacy_dataset(user_text)
+        legacy_redirect = (
+            proposal.operation == "NEW_REQUEST"
+            and (request is None or request.capability in {
+                "FINANCIAL_ANALYSIS", "ANOMALY_DETECTION",
+            })
+        )
+        if dynamic_targeted and legacy_redirect and not explicit_legacy:
+            key = ("stale_dynamic_dataset" if catalog.get("stale_selection_cleared")
+                   else "dynamic_mediation_unavailable")
+            return MediatedTurn(None, text(turn.language, key))
+
         if proposal.operation == "NEW_REQUEST":
             question = user_text if proposal.use_user_text else proposal.request.text
             return self._new_request(turn, question, replaced)
+        if proposal.operation == "SELECT_DYNAMIC_DATASET":
+            outcome = self._session.select_dynamic_dataset(proposal.dataset_id)
+            key = "dataset_selected" if outcome["status"] == "DATASET_SELECTED" else "dataset_selection_failed"
+            return MediatedTurn(outcome, text(turn.language, key), replaced_pending=replaced)
+        if proposal.operation == "DYNAMIC_FINANCIAL_ANALYSIS":
+            outcome = self._session.execute_dynamic_financial_analysis(
+                proposal.dynamic_operation,
+                dataset_id=proposal.dataset_id,
+                granularity=proposal.period_granularity,
+                missing_dimension=proposal.missing_dimension,
+            )
+            return self._present(turn, outcome, replaced=replaced)
+        if proposal.operation == "DYNAMIC_ANOMALY_SCREEN":
+            outcome = self._session.execute_dynamic_anomaly(
+                proposal.dynamic_operation, dataset_id=proposal.dataset_id,
+            )
+            labels = self._remember(outcome)
+            return self._present(turn, outcome, labels=labels, replaced=replaced)
         if proposal.operation == "ANSWER_CLARIFICATION":
             outcome = self._session.answer(proposal.clarification_answer)
             return self._present(turn, outcome, labels=self._remember(outcome))
@@ -83,6 +167,11 @@ class ConversationMediator:
         if proposal.clarification_kind == "EVIDENCE_REFERENCE":
             key = "evidence_reference" if labels else "no_evidence_reference"
             return MediatedTurn(None, text(turn.language, key, count=len(labels)))
+        if proposal.clarification_kind == "DYNAMIC_DATASET":
+            choices = ", ".join(item.dataset_id for item in options)
+            return MediatedTurn(None, text(turn.language, "dynamic_dataset", choices=choices))
+        if proposal.clarification_kind == "DYNAMIC_ANOMALY_DEFERRED":
+            return MediatedTurn(None, text(turn.language, "dynamic_anomaly_deferred"))
         return MediatedTurn(None, text(turn.language, "restate"))
 
     def _local_provider(self):
@@ -134,7 +223,10 @@ class ConversationMediator:
                                     None, replaced, labels)
             view = locate(outcome)
             if view is None or not self._local_provider():
-                return deterministic
+                return (MediatedTurn(outcome, deterministic_dynamic(view, turn.language),
+                                     FALLBACK_NOTICE, replaced, labels)
+                        if _is_dynamic_view(outcome, view)
+                        else deterministic)
             result = outcome.get("result") or {}
             interpreted = result.get("original_request") if reference is None else None
             packet = build_packet(view, language=turn.language, question=turn.user_text,
@@ -149,6 +241,10 @@ class ConversationMediator:
                            interpreted=interpreted, reference=reference)
         except Exception:
             # Ungrounded, malformed or unavailable verbalization: show nothing the model wrote.
+            view = locate(outcome)
+            if _is_dynamic_view(outcome, view):
+                return MediatedTurn(outcome, deterministic_dynamic(view, turn.language),
+                                    FALLBACK_NOTICE, replaced, labels)
             return MediatedTurn(outcome, None, FALLBACK_NOTICE, replaced, labels)
         return MediatedTurn(outcome, prefix + body, None, replaced, labels)
 
@@ -160,3 +256,26 @@ class _Turn:
     user_text: str
     language: str
     presentation_hint: str | None
+
+
+def _looks_portuguese(value):
+    words = set(re.findall(r"[^\W\d_]+", value.casefold(), re.UNICODE)) if type(value) is str else set()
+    return bool(words & {"usar", "dados", "vendas", "país", "mes", "mês", "lucro"})
+
+
+def _explicit_legacy_dataset(value):
+    normalized = " ".join(value.casefold().replace("_", " ").split()) if type(value) is str else ""
+    return "receiver general" in normalized or "company financials" in normalized
+
+
+def _is_dynamic_view(outcome, view):
+    if view is None:
+        return False
+    if outcome.get("operation") in {"dynamic_financial_analysis", "dynamic_anomaly_screen"}:
+        return True
+    return (
+        outcome.get("operation") == "follow_up"
+        and view.kind == "followup"
+        and type(view.detail) is dict
+        and view.detail.get("operation") in DYNAMIC_ANOMALY_OPERATIONS
+    )

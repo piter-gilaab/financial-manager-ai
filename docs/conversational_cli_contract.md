@@ -238,3 +238,42 @@ command, the command vocabulary, `/status` redaction, lifecycle limits, exit
 behavior and the deterministic Phase 11 presentation (used as the fallback)
 are unchanged. Without `--llm-model`, every rule above applies exactly as
 written.
+
+## Phase 17 Steps 66–67 addendum
+
+In mediated mode only, plain text may now select one exact registered dynamic
+`SALES_RECORD` dataset or request one of the nine operations defined in the
+[conversational dynamic dataset contract](conversational_dynamic_dataset_contract.md).
+The selection is kept by `FinancialManagerSession` as one opaque ID plus the last
+successful closed operation. `/status` may show that safe projection; `/cancel`,
+`/reset` and expiry clear it. No transcript, dataset row or financial value is
+added to state.
+
+The mediator receives a maximum of 20 authenticated safe catalog entries. An
+exact ID in the turn is resolved deterministically and no model-proposed ID
+outside that turn's catalog is accepted. Multiple eligible datasets without an
+exact/current selection produce clarification; a single eligible entry is not
+silently selected either. Dynamic results use the existing
+grounding guard and code-rendered tables/lists. Provider failure in dynamic
+context performs no substitute legacy execution and preserves the selection.
+
+Legacy plain-text/session behavior remains unchanged without mediation and for
+explicit legacy dataset requests. At the Steps 66–67 checkpoint, conversational
+dynamic anomalies were deferred and `/follow` applied only to legacy anomaly evidence;
+the Steps 68–69 addendum below supersedes that historical boundary.
+
+## Phase 17 Steps 68–69 addendum
+
+Mediated plain text may invoke exactly `SALES_ANOMALY_SCREEN` or
+`PROFIT_ANOMALY_SCREEN` for an exact/current dynamic dataset. The session calls
+the existing typed Manager method; scope remains GLOBAL and policy remains
+`tukey_iqr` v1.0. Current readiness is recomputed and a blocked operation is not
+substituted.
+
+Candidate references reuse the existing A1–A10 labels and `/follow` entrypoint.
+They are session-, dataset-, operation-, lineage- and evidence-bound. A new
+result, dataset change, Financial Analysis request, cancel, reset, expiry or
+stale artifacts invalidate incompatible labels. `why_selected` explains only
+the statistical value/fence relationship; `record_detail` is a bounded relevant-
+measure projection, not arbitrary row retrieval. See the
+[Step 68 contract](conversational_dynamic_anomaly_contract.md).
