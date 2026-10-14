@@ -11,9 +11,12 @@ The final test used commit `fce45ce` and a local clone outside the primary tree:
 
 ```sh
 git clone --local --no-hardlinks \
-  "/home/piter/Documentos/my workspace/financial-manager-ai" \
-  /tmp/financial-manager-step24.XLiMZ1/repository-final
+  "<path-to-primary-worktree>" \
+  "<temporary-clean-room>/repository-final"
 ```
+
+The angle-bracket values above replace the original machine-specific paths in
+this historical record; they are descriptive placeholders, not literal commands.
 
 `--no-hardlinks` kept the clone's Git objects independent. Only committed files
 were cloned; ignored and untracked files were absent. The primary working tree was

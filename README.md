@@ -1,202 +1,330 @@
 # Financial Manager AI
 
-Financial analysis project with an offline, deterministic Python core and a
-validated local SQLite database. The core implements 17 read-only accounting and
-sales-record query contracts, exact decimal arithmetic, quality disclosures and
-an offline FX lookup interface. Current dataset currencies remain UNKNOWN;
-currency conversion is not implemented.
+## Overview
 
-- **[Start here: Financial Manager AI — Technical Guide](docs/financial_manager_ai_guide.md)**
-- [Environment and data provisioning — Step 23](docs/environment_and_data_provisioning.md)
-- [Fresh-clone reproducibility — Step 24](docs/fresh_clone_reproducibility.md)
-- [V1 user evaluation — Step 25](docs/user_evaluation.md)
-- [Next capability readiness — Step 26](docs/next_capability_readiness.md)
-- [Concise CLI presentation — Step 27](docs/concise_cli_presentation.md) and
-  [validation](docs/step27_validation.md)
-- [Presentation validation — Step 28](docs/presentation_validation.md) and
-  [validation record](docs/step28_validation.md)
-- [Conversational UX readiness — Step 29](docs/conversational_ux_readiness.md) and
-  [validation record](docs/step29_validation.md)
-- [Conversation state contract — Step 30](docs/conversation_state_contract.md) and
-  [validation record](docs/step30_validation.md)
-- [Clarification continuation — Step 31](docs/clarification_continuation.md) and
-  [validation record](docs/step31_validation.md)
-- [Evidence-reference follow-ups — Step 32](docs/evidence_reference_followups.md)
-  and [validation record](docs/step32_validation.md)
-- [Bounded conversational UX — Step 33](docs/conversational_ux_validation.md) and
-  [validation record](docs/step33_validation.md)
-- [Conversational CLI contract — Step 34](docs/conversational_cli_contract.md) and
-  [validation record](docs/step34_validation.md)
-- [Interactive CLI implementation — Step 35 validation](docs/step35_validation.md)
-- [Conversational CLI validation — Step 36](docs/conversational_cli_validation.md)
-  and [validation record](docs/step36_validation.md)
-- [LLM mediation contract — Step 37](docs/llm_mediation_contract.md),
-  [validation](docs/llm_mediation_validation.md) and records for
-  [Step 37](docs/step37_validation.md), [Step 38](docs/step38_validation.md),
-  [Step 39](docs/step39_validation.md), [Step 40](docs/step40_validation.md) and
-  [Step 41](docs/step41_validation.md), plus
-  [Step 42 language and response-quality hardening](docs/step42_validation.md)
-- [Dynamic Data Onboarding — Phase 13](docs/dynamic_data_onboarding_contract.md)
-  and [end-to-end validation](docs/dynamic_data_onboarding_validation.md)
-- [Execution Adapter contract — Phase 14 Step 51](docs/execution_adapter_contract.md)
-  and [SALES_RECORD adapter validation — Step 52](docs/step52_validation.md), plus
-  [Dynamic Query Binding — Step 53](docs/dynamic_query_binding_contract.md) and
-  its [validation record](docs/step53_validation.md), and
-  [Dynamic Capability Activation — Step 54](docs/dynamic_capability_activation_contract.md)
-  with its [validation record](docs/step54_validation.md), completed by the
-  [Phase 14 end-to-end execution validation — Step 55](docs/dynamic_execution_validation.md)
-- [Dynamic Analysis Expansion — Phase 15 Step 56](docs/dynamic_analysis_expansion_contract.md),
-  with [Step 57](docs/step57_validation.md) and [Step 58](docs/step58_validation.md)
-  implementation validation, the [Step 59 capability expansion contract](docs/dynamic_capability_expansion_contract.md)
-  and [Step 60 end-to-end validation](docs/dynamic_analysis_expansion_validation.md)
-  with its [validation record](docs/step60_validation.md)
-- [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
-- [Documentation / architecture review — Step 22](docs/step22_validation.md)
-- [Financial Core usage and architecture](docs/financial_core.md)
-- [Financial Analysis Agent — Step 13](docs/financial_analysis_agent.md)
-- [Step 13 validation](docs/step13_validation.md)
-- [Investigation screening — Step 14](docs/anomaly_detection.md)
-- [Step 14 validation](docs/step14_validation.md)
-- [Main Financial Manager — Step 17](docs/main_financial_manager_agent.md)
-- [Step 17 validation](docs/step17_validation.md)
-- [Capability routing and orchestration — Step 18](docs/orchestration.md)
-- [Step 18 validation](docs/step18_validation.md)
-- [Security and privacy boundaries — Step 19](docs/security_privacy_boundaries.md)
-- [Step 19 validation](docs/step19_validation.md)
-- [Local CLI workflow — Step 20](docs/cli_workflow.md)
-- [Step 20 validation](docs/step20_validation.md)
-- [Approved query contracts](docs/query_contracts.md)
-- [Data model](docs/data_model.md) and [database schema](docs/database_schema.md)
+Financial Manager AI V1 is a local-first financial analysis system. It combines
+deterministic financial calculations, safe local dataset onboarding, bounded
+statistical anomaly screening, structured evidence and an optional local LLM for
+language mediation. It runs from a Python CLI and keeps financial and statistical
+authority outside the model.
 
-Provision the Python 3.14 environment and approved local data before running the
-CLI. The V1 runtime and tests have no third-party dependencies:
+The finished V1 supports two separate data paths:
+
+- approved legacy Receiver General and Company Financials snapshots; and
+- user-supplied CSV or constrained XLSX files approved as `SALES_RECORD`.
+
+## Why this project exists
+
+Financial data arrives with different columns, meanings, quality conditions and
+provenance. Treating every spreadsheet as an immediately trustworthy financial
+table creates avoidable calculation, currency and lineage errors. This project
+therefore separates safe ingestion, deterministic profiling, explicit semantic
+approval, current capability readiness, authoritative computation and human
+explanation.
+
+## Core principles
+
+- **Local-first:** data, artifacts, execution and optional model mediation remain local.
+- **Deterministic authority:** Financial Core and anomaly services own calculations.
+- **LLM as mediator:** a model may select a closed intent and explain evidence; it
+  cannot calculate totals, infer currency or classify anomalies.
+- **Explicit semantics:** suggestions are not financial facts until a user confirms them.
+- **Fail closed:** stale, ambiguous, malformed or unsupported requests do not execute.
+- **Structured evidence:** human and model-written explanations remain subordinate to
+  exact machine-readable results.
+- **Lineage and reproducibility:** fingerprints, versions, source rows and policy
+  identifiers accompany execution.
+- **Anomaly is not fraud:** `CANDIDATE` means only a statistical candidate for review.
+
+## Current V1 features
+
+- Safe local CSV and constrained-XLSX onboarding
+- Deterministic structural profiling and closed semantic mapping
+- Explicit role/domain confirmation and versioned local registry
+- Dataset- and operation-specific readiness
+- 17 legacy Financial Core operations
+- Nine dynamic `SALES_RECORD` Financial Analysis operations
+- Legacy anomaly screening and two dynamic GLOBAL Tukey-IQR screens
+- `FinancialManagerAgent` orchestration
+- One-shot and conversational CLI workflows
+- Optional loopback local-LLM mediation with grounded response validation
+- Conversational dynamic dataset selection, analysis and anomaly screening
+- Bounded `why_selected` and `record_detail` candidate follow-up
+- Exact `Decimal` evidence, currency boundaries, lineage and reproducibility checks
+- Security/privacy controls and 720-test regression coverage
+
+## Architecture
+
+```text
+User
+  -> CLI / Conversational CLI
+  -> ConversationMediator (optional local LLM)
+  -> FinancialManagerAgent
+  -> current readiness / validated closed request
+  -> Financial Core or Anomaly Engine
+  -> authoritative structured evidence
+  -> deterministic or grounded presentation
+```
+
+Dynamic onboarding is a separate preparatory path:
+
+```text
+CSV / constrained XLSX
+  -> safe ingestion
+  -> deterministic profiling
+  -> semantic suggestions
+  -> explicit role and domain confirmation
+  -> versioned local registry
+  -> operation-specific readiness
+  -> deterministic execution
+```
+
+Readiness is a current projection, not a stored authorization. Execution repeats
+artifact and source-integrity validation.
+
+## Supported data
+
+### Legacy datasets
+
+- **Receiver General:** eight fixed accounting query contracts and legacy screening.
+- **Company Financials:** nine fixed sales/profit query contracts and legacy screening.
+
+These paths require the approved hash-pinned local data bundle and generated
+SQLite snapshot. They are not automatically migrated into dynamic onboarding.
+
+### Dynamic datasets
+
+Only explicitly approved `SALES_RECORD` datasets have a generic V1 execution
+adapter. The ontology recognizes other domains, but recognition does not make
+them executable.
+
+## Dynamic Financial Analysis operations
+
+The catalog is exactly:
+
+1. `SALES_RECORD_COUNT`
+2. `SALES_SUMMARY`
+3. `SALES_BY_COUNTRY`
+4. `SALES_BY_PERIOD`
+5. `SALES_BY_SEGMENT`
+6. `SALES_BY_PRODUCT`
+7. `PROFIT_SUMMARY`
+8. `DISCOUNT_ANALYSIS`
+9. `UNITS_SOLD_SUMMARY`
+
+Availability is evaluated independently per dataset and operation. Optional
+confirmed roles unlock only their corresponding operations.
+
+## Anomaly detection
+
+Dynamic anomaly screening supports exactly `SALES_ANOMALY_SCREEN` and
+`PROFIT_ANOMALY_SCREEN`. Both use GLOBAL, two-sided Tukey-IQR v1.0, require at
+least 30 usable values and a positive IQR, and preserve source signs and currency
+state. Profit must be supplied and confirmed; it is never reconstructed.
+
+`CANDIDATE` != `FRAUD` != `ERROR` != `SUSPICIOUS ACTIVITY`. A candidate is only
+a statistical candidate for review. Dynamic peer screening and ML anomaly models
+are not implemented.
+
+## Conversational interface
+
+Without a model, `chat` provides deterministic session commands and legacy
+requests. With an optional loopback local provider, natural language may select
+only allowlisted intents, exact eligible dataset IDs and closed operations. The
+mediator receives bounded catalog metadata for interpretation and bounded facts
+for explanation—not complete datasets or arbitrary executable text.
+
+Sessions are process-local and non-persistent. `/cancel`, `/reset`, expiry and
+selection changes clear the relevant context and candidate references.
+
+## Installation
+
+Validated environment: **CPython 3.14.7**. The V1 production runtime uses only
+the Python standard library and repository source.
 
 ```sh
+git clone https://github.com/piter-gilaab/financial-manager-ai.git
+cd financial-manager-ai
 python3.14 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m src.provisioning
 ```
 
-See the [Step 23 provisioning guide](docs/environment_and_data_provisioning.md)
-for the exact data layout and SQLite reconstruction procedure. Run the tests from
-the project root with the activated environment:
+`requirements.txt` intentionally declares no third-party runtime dependency.
+The provisioning validator performs no download and does not run the tests.
+
+## Data provisioning
+
+The legacy CLI requires the approved raw and processed bundle described in
+[`data/README.md`](data/README.md). Those files are private/custodian-provided,
+hash-pinned and intentionally absent from Git. The project has no supported
+download or regeneration command for them.
+
+After placing the approved files at their documented repository-relative paths:
 
 ```sh
-.venv/bin/python -B -m unittest discover -s tests -v
+python -m src.provisioning
+python -m src.database.initialize
 ```
 
-Phase 5 Step 13 adds one Financial Analysis Agent over these 17 contracts, with
-conservative local question routing, structured clarification and lossless tool
-evidence. It requires no LLM or network service; model providers have a separate
-interface. Step 14 adds a separate offline statistical screening service with
-global/peer IQR rules and explicit investigation-candidate evidence; the Step 13
-agent's internal routing remains limited to the original 17 tools. ML models, forecasting, RAG and
-web/API interfaces remain unimplemented.
+The database builder refuses to replace an existing database. Dynamic onboarding
+accepts a user's own bounded local CSV/XLSX and stores immutable local artifacts
+under the Git-ignored `data/onboarding/` path; it does not require adding that
+source to Git.
 
-Phase 6 Step 17 provides `src.manager.FinancialManagerAgent`, a single facade for
-capability discovery and explicit delegation to the existing analysis agent or
-screening service. Forecasting and document retrieval are reported as BLOCKED.
-Step 18 adds deterministic `manager.plan(question)` and `manager.ask(question)`
-for top-level capability routing. Explicit `manager.execute(...)` is unchanged.
-Independent analysis and screening requests can run sequentially with separate
-results; ambiguous scopes require clarification. Step 19 enforces data-only manager
-messages, controlled snapshot/provider errors and the existing local-only provider
-policy. It adds no authentication, network transport or deployment security.
+## Quick start
 
-Phase 7 Step 20 adds a thin local CLI over that manager. From the repository root:
+Run from the repository root with the environment activated:
 
 ```sh
-.venv/bin/python -m src.cli capabilities
-.venv/bin/python -m src.cli plan "Find outliers in Profit"
-.venv/bin/python -m src.cli ask "What were total sales by country?" --json
-.venv/bin/python -m src.cli ask "Find unusual Profit values" --full
+python -m src.cli capabilities
+python -m src.cli plan "What were total sales by country?"
+python -m src.cli ask "How many Company Financials records are there?"
+python -m src.cli ask "What were total sales by country?" --json
+python -m src.cli chat
 ```
 
-Omit both format flags for concise human output. Use `--full` for expanded human
-evidence or `--json` for the complete exact structured response. The CLI preserves
-UNKNOWN currency and warnings; unavailable or ambiguous requests report the
-existing blocker/clarification. See the workflow guide for syntax and limits.
+The record-count command was validated against the approved legacy snapshot. A
+bounded excerpt of its actual output is:
 
-Phase 10 adds `src.manager.FinancialManagerSession`, a local in-memory Python API
-for explicit `new_request`, `answer`, `follow_up`, `cancel`, `reset` and `status`
-operations. It continues only the two approved clarification types and can
-re-resolve session-issued anomaly-candidate references through fresh authoritative
-execution. State expires after 30 minutes of inactivity or four hours absolute,
-is never persisted, and cannot unlock Forecasting or Document Retrieval.
+```text
+Status: SUCCESS
+Execution: PERFORMED
+Step 1 — FINANCIAL_ANALYSIS: SUCCESS
+The tool counted 700 source records.
+```
 
-Phase 11 exposes that same bounded session through an additive local interactive
-adapter:
+Use `--full` for expanded human evidence or `--json` for the complete structured
+response. An exit status of zero means a structured application response was
+delivered; inspect its application status to distinguish success, blocked and
+clarification outcomes.
+
+## Dynamic dataset workflow
+
+The following commands are real CLI syntax. The temporary synthetic file is
+created by the [V1 usage guide](docs/v1_usage_guide.md); replace `ds_...` with the
+opaque ID printed by `dataset add`.
 
 ```sh
-.venv/bin/python -m src.cli chat
+python -m src.cli dataset add /tmp/financial_manager_ai_v1_demo.csv \
+  --provenance-note "Synthetic V1 demo"
+python -m src.cli dataset status ds_... --json
+python -m src.cli dataset profile ds_... --json
+python -m src.cli dataset mappings ds_... --json
+
+python -m src.cli dataset confirm-domain ds_... SALES_RECORD \
+  --evidence "Synthetic demo specification"
+python -m src.cli dataset confirm ds_... date TRANSACTION_DATE \
+  --date-format YYYY-MM-DD --evidence "Synthetic demo specification"
+python -m src.cli dataset confirm ds_... sales SALES \
+  --evidence "Synthetic demo specification"
+python -m src.cli dataset confirm ds_... country COUNTRY \
+  --evidence "Synthetic demo specification"
+python -m src.cli dataset confirm ds_... segment SEGMENT \
+  --evidence "Synthetic demo specification"
+python -m src.cli dataset confirm ds_... product PRODUCT \
+  --evidence "Synthetic demo specification"
+python -m src.cli dataset confirm ds_... profit PROFIT \
+  --evidence "Synthetic demo specification"
+python -m src.cli dataset confirm ds_... discount DISCOUNT \
+  --evidence "Synthetic demo specification"
+python -m src.cli dataset confirm ds_... units UNITS_SOLD \
+  --evidence "Synthetic demo specification"
+
+python -m src.cli dataset capabilities ds_...
 ```
 
-Plain text always starts a new request. Use `/answer` for an approved pending
-clarification and `/follow` for a session-issued anomaly reference; `/help` lists
-the small command vocabulary. Chat is concise-only, process-memory-only and adds
-no provider, network, persistence, transcript or unrestricted conversation memory.
+`dataset add` never makes suggested semantics authoritative. Confirm only roles
+supported by real evidence for the supplied source.
 
-Phase 12 adds optional natural-language mediation to that chat through a locally
-hosted OpenAI-compatible model:
+## Conversational examples
+
+With a confirmed dataset and optional local mediation enabled:
+
+```text
+User: Use dataset ds_<runtime-generated-id>.
+User: Show sales by country.
+User: Now by product.
+User: Check Sales for anomalies.
+User: Why was A1 selected?
+```
+
+The ID above is illustrative and does not exist until onboarding returns one.
+`A1` is available only if the current authoritative screen issued that label.
+The deterministic slash equivalent is `/follow A1 why_selected` after an issued
+reference; use `/help` inside chat for the complete command list.
+
+## Optional local LLM
+
+The supported provider is a loopback-hosted OpenAI-compatible chat-completions
+endpoint. Ollama may be used when already installed and configured; it is not a
+V1 prerequisite and the project never downloads a model.
 
 ```sh
-.venv/bin/python -m src.cli chat --llm-model qwen2.5:7b-instruct \
-  --llm-url http://127.0.0.1:11434/v1/chat/completions
+python -m src.cli chat --llm-model YOUR_LOCAL_MODEL
 ```
 
-The model understands English and Portuguese and explains results. It is not the
-financial authority: it only selects approved requests, and its prose is shown
-only when a deterministic guard verifies it against the authoritative evidence.
-Tables come straight from that evidence. Only loopback endpoints are accepted, and
-any model failure falls back to the deterministic Phase 11 behavior. Without
-`--llm-model`, nothing changes.
+The default endpoint is `http://127.0.0.1:11434/v1/chat/completions`. A custom
+`--llm-url` must remain loopback. Redirects, environment proxies and external
+providers are refused. Provider failure cannot change deterministic evidence;
+local-model latency depends on model and hardware.
 
-Phase 13 adds safe local onboarding for bounded CSV and constrained formula-free
-XLSX files. It preserves source bytes under the Git-ignored `data/onboarding/`
-root, profiles structure deterministically, proposes only closed semantic roles,
-requires explicit user decisions, versions mappings/lineage, and reports
-capability readiness:
+## Testing
+
+The final Step 73 acceptance baseline is **720 passed, 0 failed, 0 errors and 0
+skipped**. Run the complete suite with:
 
 ```sh
-.venv/bin/python -m src.cli dataset add company.csv
-.venv/bin/python -m src.cli dataset mappings ds_...
-.venv/bin/python -m src.cli dataset confirm-domain ds_... SALES_RECORD --evidence "Data owner confirmation"
-.venv/bin/python -m src.cli dataset capabilities ds_...
+python -B -m unittest discover -s tests
 ```
 
-Phase 13 itself did not make newly onboarded datasets executable by the existing
-Financial Core: it added no generic analysis/anomaly adapter, forecasting, RAG
-or AP logic, so confirmed datasets remained `BLOCKED` or
-`BLOCKED_NOT_IMPLEMENTED` pending separately authorized execution work.
+See [`docs/v1_technical_validation.md`](docs/v1_technical_validation.md) for
+security, integrity, fresh-process and performance evidence.
 
-Phase 14 Steps 51–53 add a directly testable, static `SALES_RECORD` execution
-adapter and a deterministic query binder for record count, sales summary and
-sales by confirmed country. They use approved Phase 13 registry/mapping artifacts
-and existing exact Core arithmetic. Step 54 now reports those operations as
-dataset-specific `AVAILABLE_WITH_LIMITATIONS` when current binder and adapter
-validation pass, and exposes an explicit typed Manager execution method. It adds
-no fuzzy/conversational dataset selection, new operation, Anomaly, Forecasting or
-RAG activation. Step 55 validates this complete persisted path, including
-revocation/recovery, exact evidence, capability discovery, security boundaries
-and unchanged legacy behavior; Phase 14 is complete.
+## Security and privacy
 
-Phase 15 Steps 56–58 add direct typed execution for Sales by period, Segment and
-Product, Profit summary, monetary Discount analysis and Units Sold summary. The
-new operations use the same static adapter and deterministic Core. Step 59 now
-advertises all nine fixed operations through dataset-specific deterministic
-readiness and the existing capability CLI; it does not add conversational
-routing. Step 60 validates the complete persisted onboarding-to-Manager path,
-renamed semantics, partial readiness, revocation/recovery, security, lineage and
-unchanged legacy behavior. Phase 15 is complete; its scope remains the fixed
-nine-operation `SALES_RECORD` catalog.
+- No telemetry or persistent chat transcript
+- No external LLM requirement
+- Loopback-only optional provider with bounded requests/responses
+- No user-controlled `eval`, `exec`, shell, raw SQL or adapter dispatch
+- Safe bounded CSV/XLSX ingestion with archive and workbook restrictions
+- Local registry and source artifacts protected by Git-ignore rules
+- Grounding rejects invented numbers, identifiers and unsafe verdict language
 
-Phase 16 is complete. Approved dynamic `SALES_RECORD` datasets support exactly
-`SALES_ANOMALY_SCREEN` and `PROFIT_ANOMALY_SCREEN` through explicit typed
-`FinancialManagerAgent` execution. Both are global, deterministic `tukey_iqr`
-v1.0 screens over approved supplied Sales/Profit values. Current dataset
-readiness is operation-specific, the adapter reauthenticates persisted artifacts
-at execution, and complete exact evidence/lineage is preserved. `CANDIDATE` is
-only a statistical selection, never fraud or suspicion. There is no peer screen,
-conversational dynamic execution or anomaly execution CLI; Forecasting and
-Document Retrieval/RAG remain blocked.
+These are application boundaries, not a compliance certification. Host access,
+disk encryption, backups and terminal/shell-history retention remain operator responsibilities.
+
+## V1 limitations
+
+- Local, single-user CLI; no server or public API
+- Only `SALES_RECORD` has generic dynamic execution
+- Readiness is dataset- and operation-specific
+- Dynamic anomaly screening is GLOBAL-only Tukey-IQR v1.0
+- Dynamic anomaly measures are Sales and supplied confirmed Profit only
+- Candidate labels are bounded, session-local and evidence-specific
+- Currency is never inferred and no FX conversion is performed
+- Legacy data requires the approved private bundle
+- Live local-model quality and speed depend on the selected model/hardware
+
+## V2 / future work
+
+Cash Flow Forecasting, Financial Document RAG, dynamic peer anomaly screening,
+additional executable domains, arbitrary querying, ML/fraud models, SaaS,
+frontend, API, authentication, multi-user/multitenant operation, cloud storage,
+banking execution, ERP integrations, PostgreSQL migration, additional providers
+and mobile applications are explicitly outside V1.
+
+## Documentation
+
+- [V1 usage guide](docs/v1_usage_guide.md)
+- [5–10 minute demo walkthrough](docs/v1_demo_walkthrough.md)
+- [Frozen V1 scope](docs/v1_scope_freeze.md)
+- [Technical guide](docs/financial_manager_ai_guide.md)
+- [Security/privacy boundaries](docs/security_privacy_boundaries.md)
+- [Environment and data provisioning](docs/environment_and_data_provisioning.md)
+
+## Project status
+
+**Financial Manager AI V1 — COMPLETE.** Steps 1–73 are accepted, the scope is
+frozen and deferred capabilities remain future/V2 work requiring new approval.
