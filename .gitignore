@@ -1,7 +1,13 @@
 # AI development tooling
 .agents
+.codex/
 AGENTS
 skills-lock.json
+
+# Local credentials and editor state
+.aws/
+.idea/
+.vscode/
 
 # Data
 data/raw/
@@ -159,6 +165,8 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/
@@ -229,6 +237,11 @@ __marimo__/
 
 # Dataset
 data/raw/
-data/database/*.db
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
 data/database/load_validation_report.json
 .ipynb_checkpoints/
