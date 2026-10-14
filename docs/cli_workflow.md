@@ -154,13 +154,18 @@ the fixed nine-operation catalog. Each operation passes the existing binder and
 adapter readiness probe independently, subject to the global approved-domain
 anchors. Optional COUNTRY, SEGMENT, PRODUCT, PROFIT, DISCOUNT and UNITS_SOLD
 semantics affect only their corresponding operations. Canonical domain and
-approved currency state remain visible. Dynamic Anomaly Detection, Forecasting
-and Document Retrieval retain their blockers.
+approved currency state remain visible.
 
-Step 54 does not add `dataset analyze`. Explicit execution is currently the typed
-Python method `FinancialManagerAgent.execute_dataset_request`; Step 55 validates
-that path but deliberately adds no execution command. Natural-language and fuzzy
-dataset selection remain unavailable.
+Phase 16 capability output also reports the two closed dynamic anomaly
+operations independently in human and JSON output. At least one executable
+operation produces `Anomaly Detection: AVAILABLE_WITH_LIMITATIONS`; it never
+claims full anomaly coverage. Capability discovery does not run classifications
+or expose candidates. Forecasting and Document Retrieval retain their blockers.
+
+There is no `dataset analyze` or anomaly execution CLI. Explicit execution uses
+the typed Python methods `FinancialManagerAgent.execute_dataset_request` for
+Financial Analysis and `execute_dataset_anomaly_request` for the Phase 16 closed
+anomaly catalog. Natural-language and fuzzy dataset selection remain unavailable.
 
 ## Output and application outcomes
 

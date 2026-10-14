@@ -844,7 +844,27 @@ Dataset capability discovery exposes all nine fixed operations with isolated
 operation-level readiness and controlled reasons. Step 60 validates the complete
 persisted onboarding-to-Manager path, renamed mappings, periods/grouping,
 measures, currency, revocation/recovery, integrity, security, lineage and
-unchanged legacy behavior. Phase 15 is complete; no Phase 16 work is included.
+unchanged legacy behavior. Phase 15 is complete.
+
+**Phase 16 (complete):** the approved dynamic anomaly catalog contains only
+global Sales and supplied-Profit screens under the existing exact `tukey_iqr`
+v1.0 policy. The dynamic adapter authenticates Phase 13 artifacts and produces
+typed deterministic evidence; dataset capability discovery validates sample
+size, positive IQR, exact arithmetic, currency and artifact integrity
+independently for both operations. It reports `AVAILABLE_WITH_LIMITATIONS` when
+at least one can execute. The explicit typed Financial Manager entry point
+recomputes current readiness, invokes the static adapter, and preserves evidence
+and lineage without calculating or reinterpreting classifications. Phase 16 E2E
+validation covers revocation/recovery, renamed mappings, exact thresholds,
+currency, security, privacy and legacy compatibility. Conversational dynamic
+execution, peer screening and an anomaly execution CLI remain deferred;
+Forecasting and Document Retrieval/RAG remain blocked. See the
+[execution contract](dynamic_anomaly_detection_contract.md),
+[Step 62 validation](step62_validation.md),
+[readiness contract](dynamic_anomaly_readiness_contract.md) and
+[Step 63 validation](step63_validation.md), followed by the
+[Manager integration contract](dynamic_anomaly_manager_integration_contract.md)
+and [Phase 16 validation](dynamic_anomaly_validation.md).
 
 **Blocked pending evidence/data:** actual-cash forecasting and production financial
 document retrieval. Obtain authoritative representative sources and rerun readiness

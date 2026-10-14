@@ -50,11 +50,13 @@ Omitting a capability returns INVALID_REQUEST. `get_capability` returns a fresh
 metadata dictionary or null for unknown/malformed identifiers; listing has the
 fixed order shown below. Discovery invokes neither queries nor model providers.
 
-`FinancialManagerAgent(financial_analysis=..., anomaly_detection=...)` supports
-trusted application dependency injection for existing configured instances and
-test doubles. Callers cannot supply implementations, module names, providers or
-registrations through an execution request. Default construction uses the existing
-local implementations and performs no financial queries.
+`FinancialManagerAgent(financial_analysis=..., anomaly_detection=...,
+dynamic_anomaly=...)` supports trusted application dependency injection for
+existing configured instances and test doubles. `dynamic_anomaly` is shared by
+the current readiness probe and execution so the same configured adapter is
+validated before use. Callers cannot supply implementations, module names,
+providers or registrations through an execution request. Default construction
+uses the existing local implementations and performs no financial queries.
 
 ## Current capability registry
 
@@ -150,6 +152,21 @@ reported; it never expands the version 1.0 global availability vocabulary.
 Malformed/unknown targets receive a controlled blocked projection. The new
 entry point accepts no natural-language or fuzzy dataset selection and does not
 alter `execute`, `plan`, `ask`, sessions or mediation.
+
+Phase 16 Step 64 reuses this unchanged version 1.1 envelope through
+`FinancialManagerAgent.execute_dataset_anomaly_request(DynamicAnomalyRequest)`.
+The typed request contains only exact `dataset_id` and one of
+`SALES_ANOMALY_SCREEN` or `PROFIT_ANOMALY_SCREEN`. The Manager recomputes the
+operation's current dataset readiness and then delegates to the static dynamic
+anomaly adapter, which revalidates the persisted artifacts at execution. The
+Manager does not calculate thresholds or classifications. Its statistical
+presentation and the complete delegated evidence remain distinct from the
+legacy/global Anomaly Detection capability status.
+
+Dynamic candidate references are preserved in the explicit response, but the
+legacy conversational session follow-up mechanism is not extended: it depends
+on the legacy evidence schema and natural-language re-execution. No anomaly
+execution CLI or conversational dataset-discovery route is introduced.
 
 ### Status mapping
 

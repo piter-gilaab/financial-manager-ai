@@ -65,6 +65,15 @@ is queried under query_only. Table/field choices are controlled and filter value
 are bound parameters. SQL-shaped quoted categories remain literal data and cannot
 change the SQL program. Raw connection objects cannot pass the response data check.
 
+Dynamic anomaly Manager requests contain only an exact registered `dataset_id`
+and one code-owned operation enum/string. Exact type checks reject objects and
+string subclasses before Enum lookup, so caller-controlled Python protocols are
+not invoked. Current operation readiness is recomputed, and the static adapter
+then reauthenticates source/artifact identity before exact local screening.
+Requests cannot select a column, measure, formula, algorithm, threshold,
+grouping, adapter, SQL or executable path. No dataset is sent to an LLM,
+external anomaly service, telemetry or network endpoint.
+
 No production source, processed file, cleaning output, manifest or database is
 written. Tests use temporary databases/files and test-only providers/adapters.
 This is an application read-only rule, not filesystem permissions, encryption or

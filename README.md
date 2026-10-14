@@ -36,6 +36,20 @@ currency conversion is not implemented.
   [Step 39](docs/step39_validation.md), [Step 40](docs/step40_validation.md) and
   [Step 41](docs/step41_validation.md), plus
   [Step 42 language and response-quality hardening](docs/step42_validation.md)
+- [Dynamic Data Onboarding — Phase 13](docs/dynamic_data_onboarding_contract.md)
+  and [end-to-end validation](docs/dynamic_data_onboarding_validation.md)
+- [Execution Adapter contract — Phase 14 Step 51](docs/execution_adapter_contract.md)
+  and [SALES_RECORD adapter validation — Step 52](docs/step52_validation.md), plus
+  [Dynamic Query Binding — Step 53](docs/dynamic_query_binding_contract.md) and
+  its [validation record](docs/step53_validation.md), and
+  [Dynamic Capability Activation — Step 54](docs/dynamic_capability_activation_contract.md)
+  with its [validation record](docs/step54_validation.md), completed by the
+  [Phase 14 end-to-end execution validation — Step 55](docs/dynamic_execution_validation.md)
+- [Dynamic Analysis Expansion — Phase 15 Step 56](docs/dynamic_analysis_expansion_contract.md),
+  with [Step 57](docs/step57_validation.md) and [Step 58](docs/step58_validation.md)
+  implementation validation, the [Step 59 capability expansion contract](docs/dynamic_capability_expansion_contract.md)
+  and [Step 60 end-to-end validation](docs/dynamic_analysis_expansion_validation.md)
+  with its [validation record](docs/step60_validation.md)
 - [V1 acceptance](docs/v1_acceptance.md) and [Step 21 validation](docs/step21_validation.md)
 - [Documentation / architecture review — Step 22](docs/step22_validation.md)
 - [Financial Core usage and architecture](docs/financial_core.md)
@@ -137,3 +151,52 @@ only when a deterministic guard verifies it against the authoritative evidence.
 Tables come straight from that evidence. Only loopback endpoints are accepted, and
 any model failure falls back to the deterministic Phase 11 behavior. Without
 `--llm-model`, nothing changes.
+
+Phase 13 adds safe local onboarding for bounded CSV and constrained formula-free
+XLSX files. It preserves source bytes under the Git-ignored `data/onboarding/`
+root, profiles structure deterministically, proposes only closed semantic roles,
+requires explicit user decisions, versions mappings/lineage, and reports
+capability readiness:
+
+```sh
+.venv/bin/python -m src.cli dataset add company.csv
+.venv/bin/python -m src.cli dataset mappings ds_...
+.venv/bin/python -m src.cli dataset confirm-domain ds_... SALES_RECORD --evidence "Data owner confirmation"
+.venv/bin/python -m src.cli dataset capabilities ds_...
+```
+
+Phase 13 itself did not make newly onboarded datasets executable by the existing
+Financial Core: it added no generic analysis/anomaly adapter, forecasting, RAG
+or AP logic, so confirmed datasets remained `BLOCKED` or
+`BLOCKED_NOT_IMPLEMENTED` pending separately authorized execution work.
+
+Phase 14 Steps 51–53 add a directly testable, static `SALES_RECORD` execution
+adapter and a deterministic query binder for record count, sales summary and
+sales by confirmed country. They use approved Phase 13 registry/mapping artifacts
+and existing exact Core arithmetic. Step 54 now reports those operations as
+dataset-specific `AVAILABLE_WITH_LIMITATIONS` when current binder and adapter
+validation pass, and exposes an explicit typed Manager execution method. It adds
+no fuzzy/conversational dataset selection, new operation, Anomaly, Forecasting or
+RAG activation. Step 55 validates this complete persisted path, including
+revocation/recovery, exact evidence, capability discovery, security boundaries
+and unchanged legacy behavior; Phase 14 is complete.
+
+Phase 15 Steps 56–58 add direct typed execution for Sales by period, Segment and
+Product, Profit summary, monetary Discount analysis and Units Sold summary. The
+new operations use the same static adapter and deterministic Core. Step 59 now
+advertises all nine fixed operations through dataset-specific deterministic
+readiness and the existing capability CLI; it does not add conversational
+routing. Step 60 validates the complete persisted onboarding-to-Manager path,
+renamed semantics, partial readiness, revocation/recovery, security, lineage and
+unchanged legacy behavior. Phase 15 is complete; its scope remains the fixed
+nine-operation `SALES_RECORD` catalog.
+
+Phase 16 is complete. Approved dynamic `SALES_RECORD` datasets support exactly
+`SALES_ANOMALY_SCREEN` and `PROFIT_ANOMALY_SCREEN` through explicit typed
+`FinancialManagerAgent` execution. Both are global, deterministic `tukey_iqr`
+v1.0 screens over approved supplied Sales/Profit values. Current dataset
+readiness is operation-specific, the adapter reauthenticates persisted artifacts
+at execution, and complete exact evidence/lineage is preserved. `CANDIDATE` is
+only a statistical selection, never fraud or suspicion. There is no peer screen,
+conversational dynamic execution or anomaly execution CLI; Forecasting and
+Document Retrieval/RAG remain blocked.
