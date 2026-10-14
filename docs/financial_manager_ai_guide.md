@@ -2,17 +2,21 @@
 
 This is the primary learning guide to the implemented local V1. It connects the
 specialized documents to their source code; it does not replace query contracts
-or historical validation reports. Current regression verification is recorded in
-[Step 22 validation](step22_validation.md). Earlier step reports describe their
-own checkpoints, not today's total test count.
+or historical validation reports. The frozen scope is recorded in
+[the V1 scope freeze](v1_scope_freeze.md), and current final regression evidence
+is recorded in [Step 71 validation](step71_validation.md). Operational setup and
+examples are in the [V1 usage guide](v1_usage_guide.md), and the bounded portfolio
+flow is in the [V1 demo walkthrough](v1_demo_walkthrough.md). Earlier step reports
+describe their own checkpoints, not today's total test count.
 
 ## 1. Project purpose
 
-V1 answers supported descriptive questions about two supplied financial datasets
-and screens selected measures for statistical investigation candidates. Users run
-one local CLI command at a time. The software preserves source meaning, exact
-values, uncertainty and lineage instead of presenting every number as a verified
-business fact.
+V1 answers supported descriptive questions about two supplied legacy financial
+datasets and approved dynamically onboarded `SALES_RECORD` datasets, and screens
+selected measures for statistical investigation candidates. Users can run local
+one-shot CLI commands or a bounded process-local chat. The software preserves
+source meaning, exact values, uncertainty and lineage instead of presenting every
+number as a verified business fact.
 
 One Financial Manager composes deterministic data/financial services and
 interpretation/orchestration modules. Despite the project and class names,
@@ -78,10 +82,11 @@ analysis agent or reconstruct screening from an LLM explanation.
 | `tests/` | Unit, integration and real-subprocess acceptance validation |
 | `docs/`, `CONTEXT.md` | Detailed contracts/designs and historical validation; glossary contains domain vocabulary, not runtime configuration |
 
-There is no forecasting/RAG implementation directory, web application, server,
-installed console-script package or dependency manifest. Runtime modules use the
-standard library and project code. Notebook reproduction is a separate data-work
-environment; its recorded Pandas/Python versions are not CLI dependencies.
+There is no forecasting/RAG implementation directory, web application, server or
+installed console-script package. `requirements.txt` declares no third-party V1
+runtime packages; runtime modules use the standard library and project code.
+Notebook reproduction is a separate data-work environment; its recorded
+Pandas/Python versions are not CLI dependencies.
 
 ## 4. Data pipeline
 
@@ -300,6 +305,26 @@ added no execution CLI. See the
 [activation contract](dynamic_capability_activation_contract.md) and
 [Step 54 validation](step54_validation.md), followed by the complete
 [Phase 14 execution validation](dynamic_execution_validation.md).
+
+Phase 17 Steps 66–67 add an optional conversational path to that same typed
+Manager seam. The session retains one opaque dynamic dataset ID plus the last
+successful closed operation in process memory, and revalidates current catalog
+eligibility before every execution. The mediator receives no rows, paths,
+filenames or source samples: only at most 20 dataset IDs with approved domain,
+current state and supported operation identifiers. Its version-1.1 intent can
+select an exact dataset or one of the existing nine operations and their existing
+bounded parameters. It cannot write query text or bypass binder/adapter/Core
+readiness. See the [Step 66 contract](conversational_dynamic_dataset_contract.md)
+and [Step 67 validation](step67_validation.md).
+
+Steps 68–69 extend only the same bounded conversation seam to the existing Phase
+16 `SALES_ANOMALY_SCREEN|PROFIT_ANOMALY_SCREEN` GLOBAL operations. Mediation
+schema 1.2 selects one closed operation; the session calls
+`execute_dataset_anomaly_request`, issues at most A1–A10 candidate labels and
+re-resolves follow-up against current lineage and evidence digests. Statistical
+classification, fences and readiness remain deterministic. See the
+[Step 68 contract](conversational_dynamic_anomaly_contract.md) and
+[Phase 17 validation](conversational_dynamic_execution_validation.md).
 
 ## 8. Financial Analysis Agent
 
@@ -645,8 +670,9 @@ auditable and independently testable when language interpretation changes.
 
 ## 19. Testing strategy
 
-The verified Phase 15 regression is **615 passed, 0 failed, 0 errors and 0
-skipped** after Steps 59–60 readiness expansion and end-to-end validation. The
+The Phase 18 Step 71 final regression is **720 passed, 0 failed, 0 errors and 0
+skipped**. The historical Phase 15 regression was 615 after Steps 59–60 readiness
+expansion and end-to-end validation. The
 pre-Step-59 baseline was 599 after Steps 56–58, the Phase 14 Step 55 baseline
 was 573, and the pre-Step-55 baseline was 566 after Step 54
 capability activation, and the pre-Step-54 baseline was 551
@@ -658,7 +684,8 @@ of 452 in [Step 42 validation](step42_validation.md), and the Phase 11 baseline
 of 374 in [Step 36 validation](step36_validation.md). The implementation checkpoint is in
 [Step 35 validation](step35_validation.md), the Phase 10 review is in
 [Step 33 validation](step33_validation.md), and the original V1 review is in
-[Step 22 validation](step22_validation.md).
+[Step 22 validation](step22_validation.md). The current detailed baseline is in
+[Step 71 validation](step71_validation.md).
 
 | Test layer | What it protects |
 |---|---|
@@ -866,15 +893,31 @@ Forecasting and Document Retrieval/RAG remain blocked. See the
 [Manager integration contract](dynamic_anomaly_manager_integration_contract.md)
 and [Phase 16 validation](dynamic_anomaly_validation.md).
 
+**Phase 17 (implemented and validated through Step 69):** optional local LLM mediation can select
+one exact eligible onboarded dataset and invoke the fixed nine-operation dynamic
+Financial Analysis catalog through the existing session and Manager. Selection
+is non-persistent, session-scoped, bounded and freshly validated. Ambiguity and
+stale state fail closed. The same seam can invoke only the two existing GLOBAL
+dynamic anomaly operations and can resolve current A1–A10 candidate references
+for `why_selected` or bounded `record_detail`. Candidate meaning remains
+statistical only. Forecasting and Document Retrieval/RAG remain blocked.
+
+**Phase 18 Steps 70–73 (complete):** V1 scope, catalogs, executable
+domains and authority boundaries are frozen. Final security, regression,
+performance, fresh-process and CLI validation passes with no unresolved release
+blocker. README, installation, operational usage and a synthetic 5–10 minute demo
+describe the coherent finished product rather than the implementation phase log.
+Release-candidate inventory, repository hygiene, final demo execution, the A–AJ
+acceptance matrix and the final unrestricted regression pass. Financial Manager
+AI V1 is complete; no Phase 19 or V2 implementation is authorized.
+
 **Blocked pending evidence/data:** actual-cash forecasting and production financial
 document retrieval. Obtain authoritative representative sources and rerun readiness
 gates before approving implementation; neither a design nor a fixture is production evidence.
 
-**Potential future engineering, not authorized here:** reproducible environment and
-asset provisioning; measured grammar/usability improvements; performance work when
-actual workloads justify it; separately reviewed local/private model adapters;
-and, only with a deployment scope, authentication, RBAC, egress and operational
-controls. PostgreSQL/web/API, accounts payable and budget variance are historical
-or potential directions, not current registered capabilities. The next decision
-should choose a concrete use case and evidence requirements, rather than expand
-the implementation merely to complete the original roadmap.
+**Future/V2 work, not authorized here:** measured usability/performance work when
+actual workloads justify it; additional reviewed model providers; Forecasting;
+Document Retrieval/RAG; new executable domains; and deployment capabilities such
+as authentication, RBAC, egress controls, PostgreSQL, web/API and multi-user
+operation. These are not current registered capabilities and require separate
+evidence, scope and approval.
