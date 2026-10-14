@@ -76,15 +76,25 @@ class FinancialManagerAgent:
     """One explicit facade. No domain arithmetic, DB access or model interpretation."""
 
     def __init__(self, *, financial_analysis=None, anomaly_detection=None,
-                 onboarding_root: Path | str = Path("data/onboarding")):
+                 onboarding_root: Path | str = Path("data/onboarding"),
+                 dynamic_anomaly=None):
         # Keep the established manager import graph independent of onboarding.
         # These deterministic collaborators are application configuration, not
         # request-selected implementations.
         from src.execution.binding import DynamicQueryBinder
+        from src.anomaly.dynamic import DynamicAnomalyAdapter
         from src.onboarding.manager import OnboardingManager
 
         self._registry = CapabilityRegistry(financial_analysis, anomaly_detection)
-        self._dynamic_onboarding = OnboardingManager(onboarding_root)
+        self._dynamic_anomaly = (
+            dynamic_anomaly
+            if dynamic_anomaly is not None
+            else DynamicAnomalyAdapter(onboarding_root)
+        )
+        self._dynamic_onboarding = OnboardingManager(
+            onboarding_root,
+            anomaly_adapter_factory=lambda _: self._dynamic_anomaly,
+        )
         self._dynamic_binder = DynamicQueryBinder(onboarding_root)
 
     def list_capabilities(self):
@@ -155,6 +165,125 @@ class FinancialManagerAgent:
             dataset_capability=dataset_capability,
             result=result,
             summary=f"Dynamic Financial Analysis returned {status}.",
+            warnings=warnings,
+            errors=errors,
+        )
+
+    def execute_dataset_anomaly_request(self, request) -> DynamicManagerResponse:
+        """Execute one exact dataset-scoped dynamic anomaly request."""
+        from src.anomaly.dynamic import DynamicAnomalyOperation, DynamicAnomalyRequest
+        from src.onboarding.models import OnboardingError
+
+        info = self._registry.get(Capability.ANOMALY_DETECTION)
+        dataset_capability = self._dynamic_onboarding.blocked_anomaly_detection_readiness()
+        if (type(request) is not DynamicAnomalyRequest
+                or type(request.dataset_id) is not str):
+            return dynamic_response(
+                info,
+                "INVALID_REQUEST",
+                dataset_capability=dataset_capability,
+                result=None,
+                summary="Dynamic anomaly execution requires an exact typed dataset request.",
+                errors=[{
+                    "code": "malformed_request", "field": "request",
+                    "message": "Dynamic anomaly execution requires an exact typed dataset request.",
+                }],
+                delegated_status=None,
+            )
+        if isinstance(request.operation, DynamicAnomalyOperation):
+            operation = request.operation
+        elif type(request.operation) is str:
+            try:
+                operation = DynamicAnomalyOperation(request.operation)
+            except ValueError:
+                operation = None
+        else:
+            operation = None
+        if operation is None:
+            return dynamic_response(
+                info,
+                "UNSUPPORTED",
+                dataset_capability=dataset_capability,
+                result=None,
+                summary="The requested dynamic anomaly operation is not supported.",
+                errors=[{
+                    "code": "unsupported_operation", "field": "operation",
+                    "message": "The requested dynamic anomaly operation is not supported.",
+                }],
+                delegated_status=None,
+            )
+        try:
+            dataset_capability = self._dynamic_onboarding.anomaly_detection_readiness(
+                request.dataset_id,
+            )
+        except OnboardingError as error:
+            code = error.code
+            return dynamic_response(
+                info,
+                "INVALID_REQUEST",
+                dataset_capability=dataset_capability,
+                result=None,
+                summary="The exact dataset target could not be resolved.",
+                errors=[{
+                    "code": code, "field": "dataset_id",
+                    "message": "The exact dataset target could not be resolved.",
+                }],
+                delegated_status=None,
+            )
+        operation_readiness = next(
+            item for item in dataset_capability["operations"]
+            if item["identifier"] == operation.value
+        )
+        if operation_readiness["state"] != "SUPPORTED":
+            reason = operation_readiness["reasons"][0]
+            status = (
+                "UNSUPPORTED"
+                if operation_readiness["state"] == "UNSUPPORTED"
+                else "DATA_QUALITY_BLOCKER"
+            )
+            return dynamic_response(
+                info,
+                status,
+                dataset_capability=dataset_capability,
+                result=None,
+                summary="Current dataset readiness does not permit this anomaly operation.",
+                errors=[{
+                    "code": reason, "field": "operation",
+                    "message": "Current dataset readiness does not permit this anomaly operation.",
+                }],
+                delegated_status=None,
+            )
+        result = self._dynamic_anomaly.execute(request)
+        require_data_result(result)
+        status = result.get("status")
+        if status not in DOMAIN_STATUSES:
+            raise ValueError("Dynamic Anomaly Detection returned an incompatible status.")
+
+        quality = result.get("quality")
+        warnings = quality.get("warnings", ()) if type(quality) is dict else ()
+        errors = result.get("errors", ())
+        candidate_count = (
+            result["result"]["counts"]["candidate"]
+            if status in {"SUCCESS", "PARTIAL"} else None
+        )
+        if candidate_count == 1:
+            summary = (
+                "1 record met the statistical screening rule. "
+                "This record is a candidate for review under the Tukey-IQR policy."
+            )
+        elif candidate_count is not None:
+            summary = (
+                f"{candidate_count} records met the statistical screening rule. "
+                "These records are candidates for review under the Tukey-IQR policy."
+            )
+        else:
+            summary = "Dynamic anomaly screening could not be completed under the approved policy."
+        return dynamic_response(
+            info,
+            status,
+            dataset_capability=dataset_capability,
+            result=result,
+            summary=summary,
             warnings=warnings,
             errors=errors,
         )

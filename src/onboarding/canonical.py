@@ -166,7 +166,7 @@ class CanonicalMapper:
             value = _decimal_value(raw)
             if not isinstance(value, Decimal):
                 raise OnboardingError("canonical_parse_failure")
-            return str(value)
+            return format(value, "f")
         if rule == "PARSE_ISO_DATE":
             return normalize_date(raw, "YYYY-MM-DD")
         if rule in {"PARSE_DATE_DD_MM_YYYY", "PARSE_DATE_MM_DD_YYYY"}:

@@ -81,6 +81,16 @@ class _PreparedSalesRecords:
     records: tuple[CanonicalSalesRecord, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedAnomalyRecords:
+    """Authenticated projection exposed to the dynamic anomaly adapter seam."""
+
+    records: tuple[CanonicalSalesRecord, ...]
+    currency: dict
+    duplicate_row_candidates: int
+    lineage: dict
+
+
 class SalesRecordExecutionAdapter:
     domain = "SALES_RECORD"
     adapter_version = ADAPTER_VERSION
@@ -165,6 +175,51 @@ class SalesRecordExecutionAdapter:
             response["metadata"]["no_data_reason"] = calculated["no_data_reason"]
         return response
 
+    def prepare_anomaly_records(
+        self, dataset_id: str, measure: str, *, readiness_probe: bool = False,
+    ) -> tuple[AdapterValidation, PreparedAnomalyRecords | None]:
+        """Authenticate and canonicalize one closed anomaly measure with cell status."""
+        operation = {
+            "SALES": SalesRecordOperation.SALES_SUMMARY,
+            "PROFIT": SalesRecordOperation.PROFIT_SUMMARY,
+        }.get(measure) if type(measure) is str else None
+        if operation is None:
+            return validation(AdapterOutcome.UNSUPPORTED_OPERATION), None
+        checked, prepared = self._prepare(
+            AdapterExecutionRequest(dataset_id=dataset_id, operation=operation),
+            readiness_probe=readiness_probe,
+            preserve_unavailable=True,
+            allow_incompatible_currency=True,
+        )
+        if not checked.ready:
+            return checked, None
+        selected = next(
+            item for item in prepared.mapping.proposals
+            if item.proposed_role == measure and item.status == "CONFIRMED"
+        )
+        currency = self._anomaly_currency(prepared.mapping)
+        return checked, PreparedAnomalyRecords(
+            records=prepared.records,
+            currency=currency,
+            duplicate_row_candidates=prepared.profile.duplicate_row_candidates,
+            lineage={
+                "dataset_id": prepared.entry.dataset_id,
+                "registry_version": prepared.entry.registry_version,
+                "registry_digest": prepared.entry.entry_digest,
+                "profile_version": prepared.entry.profile_version,
+                "profile_digest": prepared.entry.profile_digest,
+                "semantic_mapping_version": prepared.entry.semantic_mapping_version,
+                "semantic_mapping_digest": prepared.entry.semantic_mapping_digest,
+                "confirmed_measure": measure,
+                "source_column": selected.source_column,
+                "column_id": selected.column_id,
+                "canonical_model_version": prepared.canonical_spec.version,
+                "canonical_spec_digest": prepared.canonical_spec.spec_digest,
+                "source_fingerprint": prepared.entry.source_fingerprint,
+                "source_sheet": prepared.entry.source_sheet,
+            },
+        )
+
     @staticmethod
     def _calculate(
         request: AdapterExecutionRequest,
@@ -206,6 +261,8 @@ class SalesRecordExecutionAdapter:
 
     def _prepare(
         self, request: object, *, readiness_probe: bool = False,
+        preserve_unavailable: bool = False,
+        allow_incompatible_currency: bool = False,
     ) -> tuple[AdapterValidation, _PreparedSalesRecords | None]:
         if (not isinstance(request, AdapterExecutionRequest)
                 or not isinstance(request.operation, SalesRecordOperation)
@@ -306,9 +363,13 @@ class SalesRecordExecutionAdapter:
         ):
             return validation(AdapterOutcome.SCHEMA_MISMATCH), None
         if request.operation in _MONETARY_OPERATIONS:
-            if mapping.currency_state == "CONFIRMED_MULTIPLE":
+            if (mapping.currency_state == "CONFIRMED_MULTIPLE"
+                    and not allow_incompatible_currency):
                 return validation(AdapterOutcome.QUALITY_BLOCKER), None
-            if mapping.currency_state not in {"UNKNOWN", "CONFIRMED"}:
+            allowed_currency_states = {"UNKNOWN", "CONFIRMED"} | (
+                {"CONFIRMED_MULTIPLE"} if allow_incompatible_currency else set()
+            )
+            if mapping.currency_state not in allowed_currency_states:
                 return validation(AdapterOutcome.INVALID_REGISTRY), None
             if mapping.currency_state == "CONFIRMED":
                 try:
@@ -321,7 +382,7 @@ class SalesRecordExecutionAdapter:
                     return validation(AdapterOutcome.INVALID_REGISTRY), None
         try:
             spec = self._canonical.build_spec(profile, mapping, roles=required_roles)
-            if request.operation in _STATUS_PRESERVING_OPERATIONS:
+            if preserve_unavailable or request.operation in _STATUS_PRESERVING_OPERATIONS:
                 canonical = self._canonical.map_records_with_status(dataset, spec)
             else:
                 canonical = self._canonical.map_records(dataset, spec)
@@ -338,6 +399,7 @@ class SalesRecordExecutionAdapter:
             source_sheet=record["lineage"]["source_sheet"],
             sales=self._field(record, "SALES"),
             sales_status=self._field_status(record, "SALES"),
+            sales_raw=self._field_raw(record, "SALES"),
             country=self._field(record, "COUNTRY"),
             country_status=self._field_status(record, "COUNTRY"),
             transaction_date=self._field(record, "TRANSACTION_DATE"),
@@ -348,6 +410,7 @@ class SalesRecordExecutionAdapter:
             product_status=self._field_status(record, "PRODUCT"),
             profit=self._field(record, "PROFIT"),
             profit_status=self._field_status(record, "PROFIT"),
+            profit_raw=self._field_raw(record, "PROFIT"),
             discount=self._field(record, "DISCOUNT"),
             discount_status=self._field_status(record, "DISCOUNT"),
             units_sold=self._field(record, "UNITS_SOLD"),
@@ -372,23 +435,47 @@ class SalesRecordExecutionAdapter:
         return "source_missing" if value["normalized_value"] is None else "parsed"
 
     @staticmethod
-    def _currency(prepared: _PreparedSalesRecords) -> dict:
-        mapping = prepared.mapping
+    def _field_raw(record: dict, role: str) -> str | None:
+        value = record["canonical_fields"].get(role)
+        return None if value is None else value["source_value"]
+
+    @staticmethod
+    def _anomaly_currency(mapping: SemanticMapping) -> dict:
+        return SalesRecordExecutionAdapter._currency_from_mapping(
+            mapping, allow_multiple=True,
+        )
+
+    @staticmethod
+    def _currency_from_mapping(
+        mapping: SemanticMapping, *, allow_multiple: bool = False,
+    ) -> dict:
+        if mapping.currency_state == "CONFIRMED_MULTIPLE":
+            if not allow_multiple:
+                raise ContractError(
+                    "DATA_QUALITY_BLOCKER", "unsupported_currency_partition",
+                    "Multiple denominations require an approved partition contract.",
+                )
+            return {
+                "status": "CONFIRMED_MULTIPLE",
+                "code": None,
+                "source": f"approved_semantic_mapping:{mapping.mapping_version}",
+                "basis": "incompatible_multiple_source_denominations",
+                "conversion_applied": False,
+            }
         if mapping.currency_state == "UNKNOWN":
             return CurrencyMetadata().to_dict() | {
                 "basis": "unverified_source_denomination",
                 "conversion_applied": False,
             }
-        if mapping.currency_state == "CONFIRMED":
-            return CurrencyMetadata(
-                status=CurrencyStatus.CONFIRMED,
-                code=mapping.confirmed_currency,
-                source=f"approved_semantic_mapping:{mapping.mapping_version}",
-            ).to_dict() | {"basis": "source_denomination", "conversion_applied": False}
-        raise ContractError(
-            "DATA_QUALITY_BLOCKER", "unsupported_currency_partition",
-            "Multiple denominations require an approved partition contract.",
-        )
+        return CurrencyMetadata(
+            status=CurrencyStatus.CONFIRMED,
+            code=mapping.confirmed_currency,
+            source=f"approved_semantic_mapping:{mapping.mapping_version}",
+        ).to_dict() | {"basis": "source_denomination", "conversion_applied": False}
+
+    @staticmethod
+    def _currency(prepared: _PreparedSalesRecords) -> dict:
+        return SalesRecordExecutionAdapter._currency_from_mapping(prepared.mapping)
 
     @staticmethod
     def _quality(prepared: _PreparedSalesRecords, calculated: dict,

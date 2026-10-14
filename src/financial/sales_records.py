@@ -21,6 +21,7 @@ class CanonicalSalesRecord:
     source_sheet: str | None
     sales: str | None = None
     sales_status: str = "source_missing"
+    sales_raw: str | None = None
     country: str | None = None
     country_status: str = "source_missing"
     transaction_date: str | None = None
@@ -31,6 +32,7 @@ class CanonicalSalesRecord:
     product_status: str = "source_missing"
     profit: str | None = None
     profit_status: str = "source_missing"
+    profit_raw: str | None = None
     discount: str | None = None
     discount_status: str = "source_missing"
     units_sold: str | None = None

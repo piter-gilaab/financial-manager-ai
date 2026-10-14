@@ -14,7 +14,8 @@ from .semantics import SemanticMapper
 
 class OnboardingManager:
     def __init__(self, onboarding_root: Path | str = Path("data/onboarding"), *,
-                 semantic_provider=None, limits: IngestionLimits | None = None, clock=None):
+                 semantic_provider=None, limits: IngestionLimits | None = None, clock=None,
+                 anomaly_adapter_factory=None):
         self.root = Path(onboarding_root)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         self._ingestor = SafeFileIngestor(self.root, limits=limits, clock=self.clock)
@@ -22,7 +23,9 @@ class OnboardingManager:
         self._mapper = SemanticMapper(provider=semantic_provider)
         self._decisions = SemanticDecisionService(clock=self.clock)
         self._registry = DatasetRegistry(self.root, clock=self.clock)
-        self._discovery = CapabilityDiscovery(self.root)
+        self._discovery = CapabilityDiscovery(
+            self.root, anomaly_adapter_factory=anomaly_adapter_factory,
+        )
 
     def add(self, source_path: Path | str, *, sheet: str | None = None,
             provenance_note: str | None = None) -> dict:
@@ -122,31 +125,45 @@ class OnboardingManager:
 
     def financial_analysis_readiness(self, dataset_id: str) -> dict:
         """Return the dataset-scoped Financial Analysis projection."""
-        report = self.capabilities(dataset_id)
-        analysis = next(
-            item for item in report["capabilities"]
-            if item["identifier"] == "FINANCIAL_ANALYSIS"
+        return self._capability_projection(
+            self.capabilities(dataset_id), "FINANCIAL_ANALYSIS",
         )
-        return {
-            "dataset_id": report["dataset_id"],
-            "canonical_domain": report["canonical_domain"],
-            "currency": report["currency"],
-            **analysis,
-        }
+
+    def anomaly_detection_readiness(self, dataset_id: str) -> dict:
+        """Return the current dataset-scoped Anomaly Detection projection."""
+        return self._capability_projection(
+            self.capabilities(dataset_id), "ANOMALY_DETECTION",
+        )
 
     @staticmethod
     def blocked_financial_analysis_readiness() -> dict:
         """Return the controlled Manager projection for an unresolved dataset."""
         report = CapabilityDiscovery.blocked_report("").to_dict()
-        analysis = next(
+        return OnboardingManager._capability_projection(
+            report, "FINANCIAL_ANALYSIS", unresolved=True,
+        )
+
+    @staticmethod
+    def blocked_anomaly_detection_readiness() -> dict:
+        """Return the controlled Manager projection for an unresolved dataset."""
+        report = CapabilityDiscovery.blocked_report("").to_dict()
+        return OnboardingManager._capability_projection(
+            report, "ANOMALY_DETECTION", unresolved=True,
+        )
+
+    @staticmethod
+    def _capability_projection(
+        report: dict, identifier: str, *, unresolved: bool = False,
+    ) -> dict:
+        capability = next(
             item for item in report["capabilities"]
-            if item["identifier"] == "FINANCIAL_ANALYSIS"
+            if item["identifier"] == identifier
         )
         return {
-            "dataset_id": None,
-            "canonical_domain": None,
+            "dataset_id": None if unresolved else report["dataset_id"],
+            "canonical_domain": report["canonical_domain"],
             "currency": report["currency"],
-            **analysis,
+            **capability,
         }
 
     def _after_mapping(self, dataset_id: str, mapping) -> dict:

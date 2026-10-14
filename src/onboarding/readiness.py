@@ -13,6 +13,11 @@ _DYNAMIC_ANALYSIS_LIMITATIONS = (
     "No arbitrary filters, measures, groupings or sorting are available.",
     "Dataset targeting requires an exact registered dataset_id.",
 )
+_DYNAMIC_ANOMALY_LIMITATIONS = (
+    "Only SALES_ANOMALY_SCREEN and PROFIT_ANOMALY_SCREEN are available.",
+    "Screening is GLOBAL only under tukey_iqr v1.0; peer screening is deferred.",
+    "CANDIDATE is a statistical selection, not an error, fraud, suspicion or risk finding.",
+)
 
 
 @dataclass(frozen=True)
@@ -94,7 +99,7 @@ class CapabilityDiscovery:
     """The only readiness authority for new datasets; an LLM is never consulted."""
 
     def __init__(self, onboarding_root: Path | str | None = None, *, adapter_resolver=None,
-                 binder_factory=None):
+                 binder_factory=None, anomaly_adapter_factory=None):
         self.root = Path(onboarding_root) if onboarding_root is not None else None
         if adapter_resolver is None:
             from src.execution.registry import adapter_for
@@ -104,13 +109,14 @@ class CapabilityDiscovery:
             binder_factory = DynamicQueryBinder
         self._adapter_resolver = adapter_resolver
         self._binder_factory = binder_factory
+        self._anomaly_adapter_factory = anomaly_adapter_factory
 
     def evaluate(self, profile: DatasetProfile, mapping: SemanticMapping) -> ReadinessReport:
         if mapping.dataset_id != profile.dataset_id or mapping.profile_digest != profile.profile_digest:
             from .models import OnboardingError
             raise OnboardingError("artifact_mismatch")
         return ReadinessReport(
-            version="1.1",
+            version="1.2",
             dataset_id=profile.dataset_id,
             canonical_domain=mapping.approved_domain,
             mapping_digest=mapping.mapping_digest,
@@ -129,7 +135,7 @@ class CapabilityDiscovery:
         """Return a path-free report when authenticated artifacts cannot be read."""
         artifact_reason = ("Current registered dataset artifacts failed integrity validation.",)
         return ReadinessReport(
-            version="1.1",
+            version="1.2",
             dataset_id=dataset_id,
             canonical_domain=None,
             mapping_digest="",
@@ -143,7 +149,8 @@ class CapabilityDiscovery:
                 ),
                 CapabilityReadiness(
                     "ANOMALY_DETECTION", "BLOCKED", "BLOCKED", "BLOCKED", "BLOCKED",
-                    artifact_reason,
+                    artifact_reason, _DYNAMIC_ANOMALY_LIMITATIONS,
+                    cls._blocked_anomaly_operations(artifact_reason[0]),
                 ),
                 CapabilityReadiness(
                     "CASH_FLOW_FORECASTING", "BLOCKED", "BLOCKED", "BLOCKED", "BLOCKED",
@@ -266,18 +273,110 @@ class CapabilityDiscovery:
         )
 
     def _anomaly(self, profile: DatasetProfile, mapping: SemanticMapping) -> CapabilityReadiness:
-        confirmed_measures = [
-            role for role in ("AMOUNT", "SALES", "PROFIT")
-            if self._valid_count(profile, mapping, role) >= 30
-        ]
-        if mapping.status != "SEMANTICALLY_APPROVED" or not confirmed_measures:
-            return self._blocked(
-                "ANOMALY_DETECTION", "BLOCKED", "BLOCKED",
-                ("A supported confirmed measure with at least 30 structurally valid numeric records is required.",),
+        if mapping.approved_domain != "SALES_RECORD":
+            reason = (
+                "No approved screening policy applies to this canonical domain; "
+                "dynamic anomaly screening supports only SALES_RECORD."
             )
-        return self._blocked(
-            "ANOMALY_DETECTION", "READY", "BLOCKED",
-            ("No approved screening policy applies to the confirmed domain and measure.",),
+            semantic = (
+                "READY" if mapping.status == "SEMANTICALLY_APPROVED" else "BLOCKED"
+            )
+            return CapabilityReadiness(
+                "ANOMALY_DETECTION", "BLOCKED", semantic, "BLOCKED", "BLOCKED",
+                (reason,), _DYNAMIC_ANOMALY_LIMITATIONS,
+                self._blocked_anomaly_operations(reason, state="UNSUPPORTED"),
+            )
+        if mapping.status != "SEMANTICALLY_APPROVED":
+            reason = "An approved SALES_RECORD mapping is required."
+            return CapabilityReadiness(
+                "ANOMALY_DETECTION", "BLOCKED", "BLOCKED", "READY", "BLOCKED",
+                (reason,), _DYNAMIC_ANOMALY_LIMITATIONS,
+                self._blocked_anomaly_operations(reason),
+            )
+        if self.root is None:
+            reason = "Dynamic anomaly execution infrastructure is unavailable."
+            return CapabilityReadiness(
+                "ANOMALY_DETECTION", "BLOCKED", "READY", "BLOCKED", "BLOCKED",
+                (reason,), _DYNAMIC_ANOMALY_LIMITATIONS,
+                self._blocked_anomaly_operations(reason),
+            )
+
+        from src.anomaly.dynamic import (
+            DynamicAnomalyAdapter,
+            DynamicAnomalyRequest,
+            dynamic_anomaly_registrations,
+        )
+
+        adapter = (
+            DynamicAnomalyAdapter(self.root)
+            if self._anomaly_adapter_factory is None
+            else self._anomaly_adapter_factory(self.root)
+        )
+        registrations = dynamic_anomaly_registrations()
+        shared_compatible = bool(
+            adapter is not None
+            and adapter.domain == "SALES_RECORD"
+            and adapter.adapter_version == "1.0"
+            and adapter.policy_name == "tukey_iqr"
+            and adapter.policy_version == "1.0"
+        )
+        if not shared_compatible:
+            reason = "compatible_dynamic_anomaly_adapter_unavailable"
+            return CapabilityReadiness(
+                "ANOMALY_DETECTION", "BLOCKED", "READY", "BLOCKED", "BLOCKED",
+                (reason,), _DYNAMIC_ANOMALY_LIMITATIONS,
+                self._blocked_anomaly_operations(reason, state="UNSUPPORTED"),
+            )
+
+        supported_operations = frozenset(adapter.supported_operations())
+        operation_readiness = []
+        for registration in registrations:
+            operation = registration.operation
+            if operation not in supported_operations:
+                operation_readiness.append(OperationReadiness(
+                    operation.value,
+                    "UNSUPPORTED",
+                    registration.required_roles,
+                    ("compatible_dynamic_anomaly_operation_unavailable",),
+                ))
+                continue
+            result = adapter.validate(
+                DynamicAnomalyRequest(mapping.dataset_id, operation),
+                readiness_probe=True,
+            )
+            operation_readiness.append(OperationReadiness(
+                operation.value,
+                result["state"],
+                registration.required_roles,
+                () if result["reason"] is None else (result["reason"],),
+            ))
+        operation_readiness = tuple(operation_readiness)
+        if any(item.state == "SUPPORTED" for item in operation_readiness):
+            return CapabilityReadiness(
+                "ANOMALY_DETECTION", "AVAILABLE_WITH_LIMITATIONS",
+                "READY", "READY", "READY",
+                ("At least one approved dynamic anomaly operation is currently executable.",),
+                _DYNAMIC_ANOMALY_LIMITATIONS,
+                operation_readiness,
+            )
+        return CapabilityReadiness(
+            "ANOMALY_DETECTION", "BLOCKED", "READY", "READY", "BLOCKED",
+            ("No approved dynamic anomaly operation is currently executable.",),
+            _DYNAMIC_ANOMALY_LIMITATIONS,
+            operation_readiness,
+        )
+
+    @staticmethod
+    def _blocked_anomaly_operations(
+        reason: str, *, state: str = "BLOCKED",
+    ) -> tuple[OperationReadiness, ...]:
+        from src.anomaly.dynamic import dynamic_anomaly_registrations
+
+        return tuple(
+            OperationReadiness(
+                item.operation.value, state, item.required_roles, (reason,),
+            )
+            for item in dynamic_anomaly_registrations()
         )
 
     @staticmethod

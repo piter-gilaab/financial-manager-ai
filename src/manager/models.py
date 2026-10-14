@@ -89,6 +89,9 @@ class DynamicManagerResponse(ManagerResponse):
     dataset_capability: DatasetCapabilityProjection
 
 
+_USE_EXECUTION_STATUS = object()
+
+
 def response(info, status, *, selected=None, result=None, delegated_status=None,
              summary="", warnings=(), errors=(), clarification=None) -> ManagerResponse:
     # Copies also isolate convenience fields from the authoritative nested result.
@@ -101,12 +104,15 @@ def response(info, status, *, selected=None, result=None, delegated_status=None,
 
 
 def dynamic_response(info, status, *, dataset_capability: DatasetCapabilityProjection, result,
-                     summary="", warnings=(), errors=()) -> DynamicManagerResponse:
+                     summary="", warnings=(), errors=(),
+                     delegated_status=_USE_EXECUTION_STATUS) -> DynamicManagerResponse:
     wrapped = response(
         info,
         status,
         result=result,
-        delegated_status=status,
+        delegated_status=(
+            status if delegated_status is _USE_EXECUTION_STATUS else delegated_status
+        ),
         summary=summary,
         warnings=warnings,
         errors=errors,

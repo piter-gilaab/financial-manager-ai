@@ -9,6 +9,30 @@ _NAMES = {
 }
 
 
+def _render_operations(
+    lines: list[str], capability: dict, *, supported_heading: str,
+    unavailable_heading: str, limitations_heading: str,
+) -> None:
+    supported = [item for item in capability.get("operations", ())
+                 if item["state"] == "SUPPORTED"]
+    blocked = [item for item in capability.get("operations", ())
+               if item["state"] != "SUPPORTED"]
+    lines.append(supported_heading)
+    lines.extend(f"- {item['identifier']}: {item['state']}" for item in supported)
+    if blocked:
+        lines.append(unavailable_heading)
+        lines.extend(
+            f"- {item['identifier']}: {item['state']}"
+            + (f" ({'; '.join(item.get('reasons', ()))})"
+               if item.get("reasons") else "")
+            for item in blocked
+        )
+    disclosures = capability.get("limitations") or capability.get("reasons", ())
+    if disclosures:
+        lines.append(limitations_heading)
+        lines.extend(f"- {limitation}" for limitation in disclosures)
+
+
 def render_dataset(operation: str, payload: dict) -> str:
     if operation == "add":
         return "\n".join((
@@ -55,26 +79,23 @@ def render_dataset(operation: str, payload: dict) -> str:
             None,
         )
         if financial is not None:
-            supported = [item for item in financial.get("operations", ())
-                         if item["state"] == "SUPPORTED"]
-            blocked = [item for item in financial.get("operations", ())
-                       if item["state"] != "SUPPORTED"]
-            lines.append("Executable operations:")
-            lines.extend(
-                f"- {item['identifier']}: {item['state']}"
-                for item in supported
+            _render_operations(
+                lines, financial,
+                supported_heading="Executable operations:",
+                unavailable_heading="Unavailable operations:",
+                limitations_heading="Limitations:",
             )
-            if blocked:
-                lines.append("Unavailable operations:")
-                lines.extend(
-                    f"- {item['identifier']}: {item['state']}"
-                    + (f" ({'; '.join(item.get('reasons', ()))})"
-                       if item.get("reasons") else "")
-                    for item in blocked
-                )
-            disclosures = financial.get("limitations") or financial.get("reasons", ())
-            if disclosures:
-                lines.append("Limitations:")
-                lines.extend(f"- {limitation}" for limitation in disclosures)
+        anomaly = next(
+            (item for item in payload["capabilities"]
+             if item["identifier"] == "ANOMALY_DETECTION"),
+            None,
+        )
+        if anomaly is not None and anomaly.get("operations"):
+            _render_operations(
+                lines, anomaly,
+                supported_heading="Supported anomaly operations:",
+                unavailable_heading="Unavailable anomaly operations:",
+                limitations_heading="Anomaly limitations:",
+            )
         return "\n".join(lines)
     raise ValueError("Unsupported dataset presentation.")
