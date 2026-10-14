@@ -1,5 +1,6 @@
 """Step 19 public-boundary behavior; fixtures never enter production data."""
 
+from contextlib import closing
 from copy import deepcopy
 from dataclasses import asdict, fields
 from decimal import Decimal
@@ -118,7 +119,7 @@ class SecurityPrivacyTests(unittest.TestCase):
         self.assertEqual(core.calls, [])
 
     def test_live_sqlite_connection_cannot_escape_a_delegate_response(self):
-        with sqlite3.connect(":memory:") as connection:
+        with closing(sqlite3.connect(":memory:")) as connection:
             class Adapter:
                 def ask(self, **request):
                     result = agent_response("INVALID_REQUEST")
