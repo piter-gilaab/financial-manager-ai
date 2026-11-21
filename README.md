@@ -307,13 +307,28 @@ disk encryption, backups and terminal/shell-history retention remain operator re
 - Legacy data requires the approved private bundle
 - Live local-model quality and speed depend on the selected model/hardware
 
-## V2 / future work
+## V2 status / future work
 
-Cash Flow Forecasting, Financial Document RAG, dynamic peer anomaly screening,
-additional executable domains, arbitrary querying, ML/fraud models, SaaS,
-frontend, API, authentication, multi-user/multitenant operation, cloud storage,
-banking execution, ERP integrations, PostgreSQL migration, additional providers
-and mobile applications are explicitly outside V1.
+V2 Phase 1 architecture is frozen and Phase 2 multi-domain execution is
+implemented. Generic local execution now supports exactly six closed operations
+for each of `PAYABLE`, `RECEIVABLE` and `CASH_TRANSACTION`, while preserving the
+nine `SALES_RECORD` operations and two existing anomaly operations. See the
+[V2 scope](docs/v2_scope.md), [five-phase roadmap](docs/v2_roadmap.md),
+[Phase 1 summary](docs/v2_phase1_summary.md) and
+[Phase 2 summary](docs/v2_phase2_summary.md).
+
+V2 Phase 3 is complete. A transport-neutral Application Layer and local
+FastAPI/Pydantic `/api/v1` adapter now expose safe onboarding, closed financial
+analysis, the two existing anomaly screens and process-local conversation while
+preserving Manager/Core authority. See the [Phase 3 summary](docs/v2_phase3_summary.md)
+and [API validation](docs/v2_api_validation.md). The web frontend/Next.js work
+has not started.
+
+Cash Flow Forecasting, Financial Document RAG, dynamic peer or multi-domain
+anomaly screening, arbitrary querying, ML/fraud models, SaaS, authentication,
+multi-user/multitenant operation, cloud storage, banking execution, ERP
+integrations, PostgreSQL migration, additional providers and mobile applications
+remain outside mandatory V2.
 
 ## Documentation
 
@@ -323,8 +338,14 @@ and mobile applications are explicitly outside V1.
 - [Technical guide](docs/financial_manager_ai_guide.md)
 - [Security/privacy boundaries](docs/security_privacy_boundaries.md)
 - [Environment and data provisioning](docs/environment_and_data_provisioning.md)
+- [V2 Phase 1 architecture summary](docs/v2_phase1_summary.md)
+- [V2 Phase 2 implementation summary](docs/v2_phase2_summary.md)
+- [V2 Phase 3 application/API summary](docs/v2_phase3_summary.md)
 
 ## Project status
 
-**Financial Manager AI V1 — COMPLETE.** Steps 1–73 are accepted, the scope is
-frozen and deferred capabilities remain future/V2 work requiring new approval.
+**Financial Manager AI V1 — COMPLETE.** Steps 1–73 and tag `v1.0.0` remain the
+frozen implemented baseline.
+
+**Financial Manager AI V2 — PHASE 3 APPLICATION/API COMPLETE.** Phase 4 is the
+next frozen phase and has not started.

@@ -9,6 +9,14 @@ examples are in the [V1 usage guide](v1_usage_guide.md), and the bounded portfol
 flow is in the [V1 demo walkthrough](v1_demo_walkthrough.md). Earlier step reports
 describe their own checkpoints, not today's total test count.
 
+The V1 implementation remains complete and frozen at tag `v1.0.0`. V2 Phase 1
+froze architecture/contracts and V2 Phase 2 now implements the approved
+multi-domain execution layer. See the [V2 scope](v2_scope.md),
+[roadmap](v2_roadmap.md), [Phase 1 summary](v2_phase1_summary.md) and
+[Phase 2 summary](v2_phase2_summary.md) and
+[Phase 3 summary](v2_phase3_summary.md). The local application/API layer is
+implemented; web work has not started.
+
 ## 1. Project purpose
 
 V1 answers supported descriptive questions about two supplied legacy financial
@@ -921,3 +929,14 @@ Document Retrieval/RAG; new executable domains; and deployment capabilities such
 as authentication, RBAC, egress controls, PostgreSQL, web/API and multi-user
 operation. These are not current registered capabilities and require separate
 evidence, scope and approval.
+
+**V2 Phases 1–2 (complete):** architecture is frozen and generic deterministic
+execution now supports exactly six operations each for `PAYABLE`, `RECEIVABLE`
+and `CASH_TRANSACTION` while preserving `SALES_RECORD`. Static adapters,
+operation-specific current readiness, typed Manager execution and bounded local
+conversation all delegate exact financial arithmetic, aging, overdue and net
+cash to Financial Core. Forecasting, RAG, SaaS/auth/multitenancy, PostgreSQL and
+new anomaly catalogs remain outside mandatory V2. Phase 3 now adds the
+transport-neutral Dataset/Analysis/Conversation application modules and local
+versioned FastAPI adapter without changing those authorities or catalogs.
+Phase 4 web work has not started.
