@@ -9,6 +9,13 @@ from src.financial.models import envelope
 from src.onboarding.models import OnboardingError
 from src.onboarding.registry import DatasetRegistry, re_dataset_id
 from src.dynamic_financial import DYNAMIC_GROUPED_OPERATIONS
+from src.multidomain_financial import (
+    AS_OF_OPERATIONS,
+    DOMAIN_OPERATIONS,
+    GROUPED_OPERATIONS,
+    PERIOD_OPERATIONS,
+    MultiDomainOperation,
+)
 
 from .models import (
     AdapterExecutionRequest,
@@ -41,12 +48,13 @@ class BindingOutcome(str, Enum):
 class DynamicQueryParameters:
     missing_dimension: MissingDimensionPolicy | str | None = None
     granularity: PeriodGranularity | str | None = None
+    as_of_date: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class DynamicQueryRequest:
     dataset_id: str
-    operation: SalesRecordOperation | str
+    operation: SalesRecordOperation | MultiDomainOperation | str
     parameters: DynamicQueryParameters = field(default_factory=DynamicQueryParameters)
 
 
@@ -66,7 +74,7 @@ class BoundExecutionRequest:
 @dataclass(frozen=True, slots=True)
 class DynamicOperationBinding:
     canonical_domain: str
-    operation: SalesRecordOperation
+    operation: SalesRecordOperation | MultiDomainOperation
     required_roles: tuple[str, ...]
 
 
@@ -106,7 +114,9 @@ def _result(outcome: BindingOutcome, request: BoundExecutionRequest | None = Non
     return BindingResult(outcome, _MESSAGES[outcome], request)
 
 
-_OPERATION_KEYS = {item.value: item for item in SalesRecordOperation}
+_OPERATION_KEYS = {
+    item.value: item for item in (*tuple(SalesRecordOperation), *tuple(MultiDomainOperation))
+}
 _MISSING_DIMENSION_KEYS = {item.value: item for item in MissingDimensionPolicy}
 _GRANULARITY_KEYS = {item.value: item for item in PeriodGranularity}
 _DYNAMIC_OPERATION_BINDINGS = (
@@ -138,6 +148,24 @@ _DYNAMIC_OPERATION_BINDINGS = (
     DynamicOperationBinding(
         "SALES_RECORD", SalesRecordOperation.UNITS_SOLD_SUMMARY, ("UNITS_SOLD",),
     ),
+    DynamicOperationBinding("PAYABLE", MultiDomainOperation.PAYABLE_COUNT, ()),
+    DynamicOperationBinding("PAYABLE", MultiDomainOperation.PAYABLE_SUMMARY, ("AMOUNT",)),
+    DynamicOperationBinding("PAYABLE", MultiDomainOperation.PAYABLE_BY_SUPPLIER, ("AMOUNT", "SUPPLIER")),
+    DynamicOperationBinding("PAYABLE", MultiDomainOperation.PAYABLE_BY_DUE_PERIOD, ("AMOUNT", "DUE_DATE")),
+    DynamicOperationBinding("PAYABLE", MultiDomainOperation.PAYABLE_AGING, ("AMOUNT", "DUE_DATE", "STATUS")),
+    DynamicOperationBinding("PAYABLE", MultiDomainOperation.OVERDUE_PAYABLE_SUMMARY, ("AMOUNT", "DUE_DATE", "STATUS")),
+    DynamicOperationBinding("RECEIVABLE", MultiDomainOperation.RECEIVABLE_COUNT, ()),
+    DynamicOperationBinding("RECEIVABLE", MultiDomainOperation.RECEIVABLE_SUMMARY, ("AMOUNT",)),
+    DynamicOperationBinding("RECEIVABLE", MultiDomainOperation.RECEIVABLE_BY_CUSTOMER, ("AMOUNT", "CUSTOMER")),
+    DynamicOperationBinding("RECEIVABLE", MultiDomainOperation.RECEIVABLE_BY_DUE_PERIOD, ("AMOUNT", "DUE_DATE")),
+    DynamicOperationBinding("RECEIVABLE", MultiDomainOperation.RECEIVABLE_AGING, ("AMOUNT", "DUE_DATE", "STATUS")),
+    DynamicOperationBinding("RECEIVABLE", MultiDomainOperation.OVERDUE_RECEIVABLE_SUMMARY, ("AMOUNT", "DUE_DATE", "STATUS")),
+    DynamicOperationBinding("CASH_TRANSACTION", MultiDomainOperation.CASH_TRANSACTION_COUNT, ()),
+    DynamicOperationBinding("CASH_TRANSACTION", MultiDomainOperation.CASH_INFLOW_SUMMARY, ("AMOUNT", "CASH_DIRECTION")),
+    DynamicOperationBinding("CASH_TRANSACTION", MultiDomainOperation.CASH_OUTFLOW_SUMMARY, ("AMOUNT", "CASH_DIRECTION")),
+    DynamicOperationBinding("CASH_TRANSACTION", MultiDomainOperation.NET_CASH_BY_PERIOD, ("AMOUNT", "CASH_DIRECTION", "TRANSACTION_DATE")),
+    DynamicOperationBinding("CASH_TRANSACTION", MultiDomainOperation.CASH_BY_CATEGORY, ("AMOUNT", "CASH_DIRECTION", "CATEGORY")),
+    DynamicOperationBinding("CASH_TRANSACTION", MultiDomainOperation.CASH_BY_ACCOUNT, ("AMOUNT", "CASH_DIRECTION", "ACCOUNT")),
 )
 _BINDINGS = {
     (item.canonical_domain, item.operation): item.required_roles
@@ -214,10 +242,10 @@ class DynamicQueryBinder:
             return _result(BindingOutcome.BINDING_BLOCKED)
         if entry.canonical_domain != mapping.approved_domain:
             return _result(BindingOutcome.STALE_MAPPING)
-        if entry.canonical_domain != "SALES_RECORD":
+        if entry.canonical_domain not in {"SALES_RECORD", *DOMAIN_OPERATIONS}:
             return _result(BindingOutcome.UNSUPPORTED_DOMAIN)
         operation = (
-            request.operation if isinstance(request.operation, SalesRecordOperation)
+            request.operation if isinstance(request.operation, (SalesRecordOperation, MultiDomainOperation))
             else _OPERATION_KEYS.get(request.operation) if type(request.operation) is str
             else None
         )
@@ -227,7 +255,8 @@ class DynamicQueryBinder:
         if required_roles is None:
             return _result(BindingOutcome.UNSUPPORTED_OPERATION)
         raw_policy = request.parameters.missing_dimension
-        if operation.value in DYNAMIC_GROUPED_OPERATIONS:
+        grouped = operation.value in DYNAMIC_GROUPED_OPERATIONS or operation in GROUPED_OPERATIONS
+        if grouped:
             raw_policy = MissingDimensionPolicy.BUCKET if raw_policy is None else raw_policy
             policy = (
                 raw_policy if isinstance(raw_policy, MissingDimensionPolicy)
@@ -241,7 +270,8 @@ class DynamicQueryBinder:
                 return _result(BindingOutcome.INVALID_PARAMETER)
             policy = MissingDimensionPolicy.BUCKET
         raw_granularity = request.parameters.granularity
-        if operation is SalesRecordOperation.SALES_BY_PERIOD:
+        period_operation = operation is SalesRecordOperation.SALES_BY_PERIOD or operation in PERIOD_OPERATIONS
+        if period_operation:
             raw_granularity = PeriodGranularity.MONTH if raw_granularity is None else raw_granularity
             granularity = (
                 raw_granularity if isinstance(raw_granularity, PeriodGranularity)
@@ -254,6 +284,20 @@ class DynamicQueryBinder:
             if raw_granularity is not None:
                 return _result(BindingOutcome.INVALID_PARAMETER)
             granularity = PeriodGranularity.MONTH
+        raw_as_of = request.parameters.as_of_date
+        if operation in AS_OF_OPERATIONS:
+            if type(raw_as_of) is not str:
+                return _result(BindingOutcome.INVALID_PARAMETER)
+            try:
+                from datetime import date
+                if date.fromisoformat(raw_as_of).isoformat() != raw_as_of:
+                    return _result(BindingOutcome.INVALID_PARAMETER)
+            except ValueError:
+                return _result(BindingOutcome.INVALID_PARAMETER)
+        else:
+            if raw_as_of is not None:
+                return _result(BindingOutcome.INVALID_PARAMETER)
+            raw_as_of = None
         for role in required_roles:
             matches = [item for item in mapping.proposals if item.proposed_role == role]
             if len(matches) != 1 or matches[0].status != "CONFIRMED":
@@ -278,6 +322,7 @@ class DynamicQueryBinder:
             operation=operation,
             missing_dimension=policy,
             granularity=granularity,
+            as_of_date=raw_as_of,
         )
         return _result(BindingOutcome.BOUND, BoundExecutionRequest(
             binding_version=BINDING_VERSION,
@@ -314,7 +359,7 @@ class DynamicQueryBinder:
             isinstance(request, DynamicQueryRequest) and type(request.dataset_id) is str
         ) else None
         operation = request.operation if isinstance(request, DynamicQueryRequest) else None
-        if isinstance(operation, SalesRecordOperation):
+        if isinstance(operation, (SalesRecordOperation, MultiDomainOperation)):
             operation = operation.value
         elif type(operation) is not str:
             operation = None
@@ -345,7 +390,7 @@ class DynamicQueryBinder:
         adapter,
         *,
         domain: str,
-        operation: SalesRecordOperation,
+        operation: SalesRecordOperation | MultiDomainOperation,
         adapter_version: str,
         canonical_model_version: str,
     ) -> bool:

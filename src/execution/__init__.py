@@ -20,6 +20,12 @@ from .models import (
 )
 from .registry import adapter_for
 from .sales_record import SalesRecordExecutionAdapter
+from .multidomain import (
+    CashTransactionExecutionAdapter,
+    PayableExecutionAdapter,
+    ReceivableExecutionAdapter,
+)
+from src.multidomain_financial import MultiDomainOperation
 
 __all__ = [
     "AdapterExecutionRequest",
@@ -33,7 +39,11 @@ __all__ = [
     "DynamicQueryParameters",
     "DynamicQueryRequest",
     "MissingDimensionPolicy",
+    "MultiDomainOperation",
     "PeriodGranularity",
+    "PayableExecutionAdapter",
+    "ReceivableExecutionAdapter",
+    "CashTransactionExecutionAdapter",
     "SalesRecordExecutionAdapter",
     "SalesRecordOperation",
     "adapter_for",

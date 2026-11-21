@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any
 
 from src.dynamic_financial import MissingDimensionPolicy, PeriodGranularity, SalesRecordOperation
+from src.multidomain_financial import MultiDomainOperation
 from src.financial.models import envelope
 
 
@@ -18,14 +19,16 @@ class AdapterOutcome(str, Enum):
     QUALITY_BLOCKER = "QUALITY_BLOCKER"
     STALE_MAPPING = "STALE_MAPPING"
     DATASET_BLOCKED = "DATASET_BLOCKED"
+    REFERENCE_DATE_MISMATCH = "REFERENCE_DATE_MISMATCH"
 
 
 @dataclass(frozen=True, slots=True)
 class AdapterExecutionRequest:
     dataset_id: str
-    operation: SalesRecordOperation | str
+    operation: SalesRecordOperation | MultiDomainOperation | str
     missing_dimension: MissingDimensionPolicy | str = MissingDimensionPolicy.BUCKET
     granularity: PeriodGranularity | str = PeriodGranularity.MONTH
+    as_of_date: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +54,7 @@ _MESSAGES = {
     AdapterOutcome.QUALITY_BLOCKER: "The requested result cannot be calculated safely.",
     AdapterOutcome.STALE_MAPPING: "The registered semantic mapping is stale.",
     AdapterOutcome.DATASET_BLOCKED: "The dataset is not eligible for execution.",
+    AdapterOutcome.REFERENCE_DATE_MISMATCH: "The request date does not match the approved dataset reference date.",
 }
 
 
@@ -60,7 +64,9 @@ def validation(outcome: AdapterOutcome) -> AdapterValidation:
 
 def evidence_envelope(request: object) -> dict[str, Any]:
     if isinstance(request, AdapterExecutionRequest):
-        operation = request.operation.value if isinstance(request.operation, SalesRecordOperation) else (
+        operation = request.operation.value if isinstance(
+            request.operation, (SalesRecordOperation, MultiDomainOperation),
+        ) else (
             request.operation if type(request.operation) is str else None
         )
         dataset_id = request.dataset_id if type(request.dataset_id) is str else None
