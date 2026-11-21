@@ -1,0 +1,72 @@
+"""Dependency-neutral closed vocabulary for V2 multi-domain execution."""
+
+from enum import Enum
+
+
+class MultiDomainOperation(str, Enum):
+    PAYABLE_COUNT = "PAYABLE_COUNT"
+    PAYABLE_SUMMARY = "PAYABLE_SUMMARY"
+    PAYABLE_BY_SUPPLIER = "PAYABLE_BY_SUPPLIER"
+    PAYABLE_BY_DUE_PERIOD = "PAYABLE_BY_DUE_PERIOD"
+    PAYABLE_AGING = "PAYABLE_AGING"
+    OVERDUE_PAYABLE_SUMMARY = "OVERDUE_PAYABLE_SUMMARY"
+    RECEIVABLE_COUNT = "RECEIVABLE_COUNT"
+    RECEIVABLE_SUMMARY = "RECEIVABLE_SUMMARY"
+    RECEIVABLE_BY_CUSTOMER = "RECEIVABLE_BY_CUSTOMER"
+    RECEIVABLE_BY_DUE_PERIOD = "RECEIVABLE_BY_DUE_PERIOD"
+    RECEIVABLE_AGING = "RECEIVABLE_AGING"
+    OVERDUE_RECEIVABLE_SUMMARY = "OVERDUE_RECEIVABLE_SUMMARY"
+    CASH_TRANSACTION_COUNT = "CASH_TRANSACTION_COUNT"
+    CASH_INFLOW_SUMMARY = "CASH_INFLOW_SUMMARY"
+    CASH_OUTFLOW_SUMMARY = "CASH_OUTFLOW_SUMMARY"
+    NET_CASH_BY_PERIOD = "NET_CASH_BY_PERIOD"
+    CASH_BY_CATEGORY = "CASH_BY_CATEGORY"
+    CASH_BY_ACCOUNT = "CASH_BY_ACCOUNT"
+
+
+PAYABLE_OPERATIONS = tuple(
+    item for item in MultiDomainOperation if item.value.startswith("PAYABLE_")
+) + (MultiDomainOperation.OVERDUE_PAYABLE_SUMMARY,)
+RECEIVABLE_OPERATIONS = tuple(
+    item for item in MultiDomainOperation if item.value.startswith("RECEIVABLE_")
+) + (MultiDomainOperation.OVERDUE_RECEIVABLE_SUMMARY,)
+CASH_OPERATIONS = tuple(
+    item for item in MultiDomainOperation
+    if item not in PAYABLE_OPERATIONS and item not in RECEIVABLE_OPERATIONS
+)
+MULTIDOMAIN_FINANCIAL_OPERATIONS = tuple(item.value for item in MultiDomainOperation)
+
+
+DOMAIN_OPERATIONS = {
+    "PAYABLE": PAYABLE_OPERATIONS,
+    "RECEIVABLE": RECEIVABLE_OPERATIONS,
+    "CASH_TRANSACTION": CASH_OPERATIONS,
+}
+
+
+GROUPED_OPERATIONS = frozenset({
+    MultiDomainOperation.PAYABLE_BY_SUPPLIER,
+    MultiDomainOperation.PAYABLE_BY_DUE_PERIOD,
+    MultiDomainOperation.RECEIVABLE_BY_CUSTOMER,
+    MultiDomainOperation.RECEIVABLE_BY_DUE_PERIOD,
+    MultiDomainOperation.NET_CASH_BY_PERIOD,
+    MultiDomainOperation.CASH_BY_CATEGORY,
+    MultiDomainOperation.CASH_BY_ACCOUNT,
+})
+PERIOD_OPERATIONS = frozenset({
+    MultiDomainOperation.PAYABLE_BY_DUE_PERIOD,
+    MultiDomainOperation.RECEIVABLE_BY_DUE_PERIOD,
+    MultiDomainOperation.NET_CASH_BY_PERIOD,
+})
+AS_OF_OPERATIONS = frozenset({
+    MultiDomainOperation.PAYABLE_AGING,
+    MultiDomainOperation.OVERDUE_PAYABLE_SUMMARY,
+    MultiDomainOperation.RECEIVABLE_AGING,
+    MultiDomainOperation.OVERDUE_RECEIVABLE_SUMMARY,
+})
+COUNT_OPERATIONS = frozenset({
+    MultiDomainOperation.PAYABLE_COUNT,
+    MultiDomainOperation.RECEIVABLE_COUNT,
+    MultiDomainOperation.CASH_TRANSACTION_COUNT,
+})
+MONETARY_OPERATIONS = frozenset(MultiDomainOperation) - COUNT_OPERATIONS
