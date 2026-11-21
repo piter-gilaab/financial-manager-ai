@@ -141,6 +141,7 @@ class ConversationMediator:
                 dataset_id=proposal.dataset_id,
                 granularity=proposal.period_granularity,
                 missing_dimension=proposal.missing_dimension,
+                as_of_date=proposal.as_of_date,
             )
             return self._present(turn, outcome, replaced=replaced)
         if proposal.operation == "DYNAMIC_ANOMALY_SCREEN":

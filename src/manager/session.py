@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from src.dynamic_financial import DYNAMIC_FINANCIAL_OPERATIONS, dynamic_parameters_supported
 from src.dynamic_anomaly import DYNAMIC_ANOMALY_OPERATIONS
+from src.multidomain_financial import MULTIDOMAIN_FINANCIAL_OPERATIONS
 
 from .agent import FinancialManagerAgent
 
@@ -268,7 +269,10 @@ def _validate_state(state):
             and (type(dynamic) is not DynamicDatasetContext
                  or DATASET_ID_PATTERN.fullmatch(dynamic.dataset_id) is None
                  or (dynamic.last_operation is not None
-                     and dynamic.last_operation not in DYNAMIC_FINANCIAL_OPERATIONS))):
+                     and dynamic.last_operation not in {
+                         *DYNAMIC_FINANCIAL_OPERATIONS,
+                         *MULTIDOMAIN_FINANCIAL_OPERATIONS,
+                     }))):
         raise ValueError("Conversation dynamic dataset context is invalid.")
     if type(state.active_context) is EvidenceContext:
         if any(item.session_id != state.session_id for item in state.active_context.handles):
@@ -821,14 +825,28 @@ class FinancialManagerSession:
 
     def execute_dynamic_financial_analysis(
         self, operation, *, dataset_id=None, granularity=None, missing_dimension=None,
+        as_of_date=None,
     ):
         """Resolve one session-scoped dataset and delegate one closed dynamic operation."""
         from src.execution import DynamicQueryParameters, DynamicQueryRequest
 
         if self._state_condition() != "ACTIVE":
             self._start()
+        from src.multidomain_financial import AS_OF_OPERATIONS, MultiDomainOperation
+        try:
+            multidomain_operation = MultiDomainOperation(operation)
+        except (TypeError, ValueError):
+            multidomain_operation = None
+        if multidomain_operation in AS_OF_OPERATIONS and as_of_date is None:
+            return self._outcome(
+                "dynamic_financial_analysis", "CLARIFICATION_REQUIRED", error={
+                    "code": "as_of_date_required",
+                    "message": "Provide an explicit YYYY-MM-DD as_of_date for aging or overdue analysis.",
+                },
+            )
         if not dynamic_parameters_supported(
-                operation, granularity=granularity, missing_dimension=missing_dimension):
+                operation, granularity=granularity, missing_dimension=missing_dimension,
+                as_of_date=as_of_date):
             return self._outcome("dynamic_financial_analysis", "INVALID_DYNAMIC_REQUEST", error={
                 "code": "unsupported_dynamic_parameter",
                 "message": "Use one approved dynamic Financial Analysis operation and its closed parameters.",
@@ -880,6 +898,7 @@ class FinancialManagerSession:
             DynamicQueryParameters(
                 missing_dimension=missing_dimension,
                 granularity=granularity,
+                as_of_date=as_of_date,
             ),
         )
         result = self._manager.execute_dataset_request(request)

@@ -115,13 +115,14 @@ class FinancialManagerAgent:
         return orchestrate(self, question)
 
     def dynamic_dataset_catalog(self, *, candidate_id=None):
-        """Return bounded safe metadata for currently executable SALES_RECORD datasets."""
+        """Return bounded safe metadata for currently executable approved-domain datasets."""
         from src.dynamic_anomaly import DYNAMIC_ANOMALY_OPERATIONS
         from src.dynamic_financial import DYNAMIC_FINANCIAL_OPERATIONS
+        from src.multidomain_financial import MULTIDOMAIN_FINANCIAL_OPERATIONS
         from src.onboarding.models import OnboardingError
         from src.onboarding.registry import re_dataset_id
 
-        allowed_operations = set(DYNAMIC_FINANCIAL_OPERATIONS)
+        allowed_operations = set((*DYNAMIC_FINANCIAL_OPERATIONS, *MULTIDOMAIN_FINANCIAL_OPERATIONS))
         candidate = candidate_id if re_dataset_id(candidate_id) else None
         identifiers = list(self._dynamic_onboarding.registered_dataset_ids())
         if candidate in identifiers:
@@ -143,13 +144,15 @@ class FinancialManagerAgent:
                 if (type(item) is dict and item.get("state") == "SUPPORTED"
                     and item.get("identifier") in allowed_operations)
             ]
-            if readiness.get("canonical_domain") != "SALES_RECORD" or not supported:
+            if readiness.get("canonical_domain") not in {
+                    "SALES_RECORD", "PAYABLE", "RECEIVABLE", "CASH_TRANSACTION",
+            } or not supported:
                 continue
             eligible_count += 1
             if len(datasets) < MAX_DYNAMIC_DATASET_CATALOG:
                 datasets.append({
                     "dataset_id": dataset_id,
-                    "canonical_domain": "SALES_RECORD",
+                    "canonical_domain": readiness["canonical_domain"],
                     "state": readiness["state"],
                     "supported_operations": supported,
                     "anomaly_state": anomaly_readiness["state"],

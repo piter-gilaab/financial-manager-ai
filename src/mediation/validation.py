@@ -1,6 +1,7 @@
 """Fail-closed validation of untrusted provider output."""
 
 from decimal import Decimal, InvalidOperation
+from datetime import date
 import json
 import re
 import unicodedata
@@ -9,7 +10,7 @@ from src.dynamic_financial import dynamic_parameters_supported
 
 from .catalog import REQUESTS, USER_TEXT
 from .models import (
-    CAPABILITIES, CLARIFICATION_KINDS, CURRENT_MEDIATION_VERSION,
+    ALL_DYNAMIC_FINANCIAL_OPERATIONS, CAPABILITIES, CLARIFICATION_KINDS, CURRENT_MEDIATION_VERSION,
     DATASET_CLARIFICATION_KINDS, DATASET_MEDIATION_VERSION, DYNAMIC_ANOMALY_OPERATIONS,
     DYNAMIC_FINANCIAL_OPERATIONS, FOLLOW_UP_INTENTS, LANGUAGES,
     LEGACY_CLARIFICATION_KINDS, LEGACY_OPERATIONS, MEDIATION_VERSION,
@@ -24,9 +25,10 @@ INTENT_KEYS = frozenset((
     "clarification_kind", "evidence_reference", "follow_up_intent", "presentation_hint",
     "response_language",
 ))
-DYNAMIC_INTENT_KEYS = INTENT_KEYS | frozenset((
+DYNAMIC_INTENT_KEYS_V1 = INTENT_KEYS | frozenset((
     "dataset_id", "dynamic_operation", "period_granularity", "missing_dimension",
 ))
+DYNAMIC_INTENT_KEYS = DYNAMIC_INTENT_KEYS_V1 | {"as_of_date"}
 FENCED_JSON = re.compile(r"\A```(?:json)?\s*\n(.*)\n```\Z", re.S)
 
 
@@ -77,7 +79,8 @@ def parse_intent(raw, context):
     version = data.get("version")
     dynamic_versions = (DATASET_MEDIATION_VERSION, CURRENT_MEDIATION_VERSION)
     expected_keys = DYNAMIC_INTENT_KEYS if version in dynamic_versions else INTENT_KEYS
-    if set(data) != expected_keys:
+    if set(data) != expected_keys and not (
+            version in dynamic_versions and set(data) == DYNAMIC_INTENT_KEYS_V1):
         raise MediationRejected("intent_keys_mismatch")
     if version not in (MEDIATION_VERSION, *dynamic_versions):
         raise MediationRejected("unsupported_version")
@@ -105,10 +108,19 @@ def parse_intent(raw, context):
     dataset_id = _enum(data.get("dataset_id"), dataset_ids)
     dynamic_operation = _enum(
         data.get("dynamic_operation"),
-        (*DYNAMIC_FINANCIAL_OPERATIONS, *DYNAMIC_ANOMALY_OPERATIONS),
+        (*ALL_DYNAMIC_FINANCIAL_OPERATIONS, *DYNAMIC_ANOMALY_OPERATIONS),
     )
     granularity = _enum(data.get("period_granularity"), PERIOD_GRANULARITIES)
     missing_dimension = _enum(data.get("missing_dimension"), MISSING_DIMENSION_POLICIES)
+    as_of_date = data.get("as_of_date")
+    if as_of_date is not None:
+        if type(as_of_date) is not str:
+            raise MediationRejected("value_not_allowlisted")
+        try:
+            if date.fromisoformat(as_of_date).isoformat() != as_of_date:
+                raise ValueError
+        except ValueError:
+            raise MediationRejected("value_not_allowlisted") from None
 
     used = {name for name, value in (
         ("intent", identifier), ("clarification_answer", answer),
@@ -116,6 +128,7 @@ def parse_intent(raw, context):
         ("follow_up_intent", follow_up),
         ("dataset_id", dataset_id), ("dynamic_operation", dynamic_operation),
         ("period_granularity", granularity), ("missing_dimension", missing_dimension),
+        ("as_of_date", as_of_date),
     ) if value is not None}
     # operation -> (fields it may set, fields it must set)
     permitted, required = {
@@ -125,7 +138,7 @@ def parse_intent(raw, context):
         "REQUEST_CLARIFICATION": ({"clarification_kind"}, {"clarification_kind"}),
         "SELECT_DYNAMIC_DATASET": ({"dataset_id"}, {"dataset_id"}),
         "DYNAMIC_FINANCIAL_ANALYSIS": (
-            {"dataset_id", "dynamic_operation", "period_granularity", "missing_dimension"},
+            {"dataset_id", "dynamic_operation", "period_granularity", "missing_dimension", "as_of_date"},
             {"dynamic_operation"},
         ),
         "DYNAMIC_ANOMALY_SCREEN": (
@@ -152,6 +165,8 @@ def parse_intent(raw, context):
                 dynamic_operation,
                 granularity=granularity,
                 missing_dimension=missing_dimension,
+                as_of_date=as_of_date,
+                allow_missing_as_of=True,
             )):
         raise MediationRejected("dynamic_parameter_mismatch")
     if (operation == "DYNAMIC_ANOMALY_SCREEN"
@@ -182,6 +197,7 @@ def parse_intent(raw, context):
         dynamic_operation=dynamic_operation,
         period_granularity=granularity,
         missing_dimension=missing_dimension,
+        as_of_date=as_of_date,
     )
 
 
@@ -231,10 +247,9 @@ FORBIDDEN_PATTERNS = (
     # Blocked capabilities and unverified financial semantics.
     ("capability_claim", re.compile(
         r"\b(?:forecast\w*|predict\w*|projection\w*|previs\w*|prever|prev[êe]\w*|proje[çc]\w*|"
-        r"projetad\w*|cash[ -]?flows?|fluxos? de caixa|cash (?:inflows?|outflows?|receipts?)|"
-        r"entradas? de caixa|sa[íi]das? de caixa|receipts?|recebimentos?|invoices?|faturas?|"
+        r"projetad\w*|receipts?|recebimentos?|invoices?|faturas?|"
         r"contracts?|contratos?|documents?|documentos?|payments?|pagamentos?|revenue|"
-        r"receitas?|faturamento|cash|caixa|income|earnings|billings?|"
+        r"receitas?|faturamento|income|earnings|billings?|"
         r"will (?:grow|increase|decrease|decline|fall|rise|reach|be)|next (?:month|quarter|year)|"
         r"pr[óo]xim[oa]s? (?:m[êe]s|meses|trimestres?|anos?)|"
         r"(?:v[ãa]o|vai|ir[áa]|ir[ãa]o) (?:crescer|aumentar|cair|diminuir|subir))\b", re.I)),
@@ -247,6 +262,11 @@ FORBIDDEN_PATTERNS = (
         r"\b[a-z0-9]+(?:_[a-z0-9]+)+\b|\b[0-9a-f]{16,}\b|\b(?:RG|CF)-\d{2}\b|\b[FW]\d+\b|"
         r"\bevidence-\w+|(?:^|\s)(?:/|\./|~/|src/|docs/|data/)\S+")),
     ("markup", re.compile(r"```|^\s*\|.*\|\s*$|\t|<[a-z/][^>]*>", re.M | re.I)),
+)
+
+CASH_SEMANTICS_PATTERN = re.compile(
+    r"\b(?:cash[ -]?flows?|fluxos? de caixa|cash (?:inflows?|outflows?)|"
+    r"entradas? de caixa|sa[íi]das? de caixa|cash|caixa)\b", re.I,
 )
 
 
@@ -379,9 +399,16 @@ def validate_natural_response(raw, packet):
         raise MediationRejected("language_mismatch")
     # Compatibility forms (fullwidth digits/symbols, ligatures) are checked as what they render.
     message = unicodedata.normalize("NFKC", message).strip()
+    cash_grounded = any(
+        any(term in str(item.get("label", "")).casefold()
+            for term in ("cash", "inflow", "outflow", "entrada de caixa", "saída de caixa"))
+        for item in packet["facts"]
+    )
     for code, pattern in FORBIDDEN_PATTERNS:
         if pattern.search(message):
             raise MediationRejected(code)
+    if not cash_grounded and CASH_SEMANTICS_PATTERN.search(message):
+        raise MediationRejected("capability_claim")
     if _obvious_language_mismatch(message, packet["language"]):
         raise MediationRejected("language_mismatch")
     # Spelled-out large numbers and bare scale words cannot be grounded, so they are refused.

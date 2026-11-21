@@ -6,6 +6,7 @@ from src.dynamic_financial import (
     DYNAMIC_FINANCIAL_OPERATIONS, MISSING_DIMENSION_POLICIES, PERIOD_GRANULARITIES,
 )
 from src.dynamic_anomaly import DYNAMIC_ANOMALY_OPERATIONS
+from src.multidomain_financial import MULTIDOMAIN_FINANCIAL_OPERATIONS
 from src.manager.models import Capability
 
 from .catalog import CatalogRequest
@@ -30,6 +31,9 @@ LANGUAGES = ("en", "pt-BR")
 CAPABILITIES = tuple(item.value for item in Capability)
 MAX_REFERENCE_LABELS = 10
 REFERENCE_LABELS = tuple(f"A{index}" for index in range(1, MAX_REFERENCE_LABELS + 1))
+ALL_DYNAMIC_FINANCIAL_OPERATIONS = (
+    *DYNAMIC_FINANCIAL_OPERATIONS, *MULTIDOMAIN_FINANCIAL_OPERATIONS,
+)
 
 
 class MediationRejected(Exception):
@@ -52,7 +56,7 @@ class DynamicDatasetOption:
     def __post_init__(self):
         if (type(self.dataset_id) is not str or type(self.canonical_domain) is not str
                 or type(self.state) is not str or type(self.supported_operations) is not tuple
-                or any(item not in DYNAMIC_FINANCIAL_OPERATIONS
+                or any(item not in ALL_DYNAMIC_FINANCIAL_OPERATIONS
                        for item in self.supported_operations)
                 or (self.anomaly_state is not None and type(self.anomaly_state) is not str)
                 or type(self.supported_anomaly_operations) is not tuple
@@ -90,7 +94,7 @@ class InterpretationContext:
                     and self.selected_dynamic_dataset not in identifiers)
                 or (self.last_dynamic_operation is not None
                     and (self.selected_dynamic_dataset is None
-                         or self.last_dynamic_operation not in DYNAMIC_FINANCIAL_OPERATIONS))
+                         or self.last_dynamic_operation not in ALL_DYNAMIC_FINANCIAL_OPERATIONS))
                 or any(value not in identifiers for value in self.explicit_dynamic_dataset_ids)):
             raise ValueError("Dynamic interpretation context is inconsistent.")
 
@@ -110,6 +114,7 @@ class MediationIntent:
     dynamic_operation: str | None
     period_granularity: str | None
     missing_dimension: str | None
+    as_of_date: str | None
 
 
 @dataclass(frozen=True, slots=True)

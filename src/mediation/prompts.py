@@ -4,7 +4,7 @@ import json
 
 from .catalog import REQUESTS, USER_TEXT
 from .models import (
-    CAPABILITIES, CLARIFICATION_KINDS, CURRENT_MEDIATION_VERSION,
+    ALL_DYNAMIC_FINANCIAL_OPERATIONS, CAPABILITIES, CLARIFICATION_KINDS, CURRENT_MEDIATION_VERSION,
     DYNAMIC_ANOMALY_OPERATIONS, DYNAMIC_FINANCIAL_OPERATIONS, FOLLOW_UP_INTENTS, LANGUAGES,
     MISSING_DIMENSION_POLICIES, OPERATIONS, PERIOD_GRANULARITIES, PRESENTATIONS,
 )
@@ -56,6 +56,9 @@ DECISION PROCEDURE
     explicit id when present, otherwise null to reuse selected_dynamic_dataset. Use MONTH or YEAR
     only for period analysis and BUCKET or EXCLUDE only when the user explicitly requests the
     existing missing-dimension policy. Never choose a source column, filter, formula or grouping.
+    Aging and overdue operations may use only an explicit YYYY-MM-DD date written by the user;
+    copy it to as_of_date. If it is missing, still select the exact operation with as_of_date null
+    so the application requests clarification. Never invent today's date or a dataset date.
 2c. For statistical anomaly screening of an explicitly named or selected dynamic dataset, use
     DYNAMIC_ANOMALY_SCREEN and only SALES_ANOMALY_SCREEN or PROFIT_ANOMALY_SCREEN. Screening is
     GLOBAL under the fixed Tukey-IQR policy; never choose an algorithm, threshold, peer group,
@@ -98,9 +101,10 @@ Return ONLY one JSON object, no markdown and no commentary, with exactly these k
  "presentation_hint": "TEXT" | "TABLE" | "LIST" | null,
  "response_language": "en" | "pt-BR",
  "dataset_id": listed exact id (selection or explicit dynamic analysis) or null,
- "dynamic_operation": one of the nine financial operations or two anomaly operations or null,
+ "dynamic_operation": one of the listed closed financial operations or two anomaly operations or null,
  "period_granularity": "MONTH" | "YEAR" (period analysis only) or null,
- "missing_dimension": "BUCKET" | "EXCLUDE" (grouped analysis only) or null}
+ "missing_dimension": "BUCKET" | "EXCLUDE" (grouped analysis only) or null,
+ "as_of_date": explicit YYYY-MM-DD (aging/overdue only) or null}
 
 EXAMPLES (keys that are null are omitted here for brevity; you must include every key)
 user_input "Como estão as vendas por país?" -> {"operation": "NEW_REQUEST", "intent": "CF_SALES_BY_COUNTRY", "capability_hint": "FINANCIAL_ANALYSIS", "response_language": "pt-BR"}
@@ -141,7 +145,9 @@ RULES
 - Screening results are statistical "candidates for review". Say that they deserve statistical
   review, not that anything improper was proved. Never call them fraud, errors, misconduct,
   suspicious transactions, confirmed or certain anomalies, and never give probabilities.
-- Never mention forecasts, predictions, cash flow, payments or documents.
+- Never mention forecasts, predictions or documents. You may describe observed cash inflow,
+  outflow and net cash only when those exact facts are present in structured evidence; never
+  turn them into a forecast or infer a payment/receipt relationship.
 - Never mention internal identifiers, contract or schema names, routing or provider details,
   codes, field names, hashes, file paths or fact ids.
 - Do not write tables, markdown or code. Do not repeat the table or list that the application
@@ -196,9 +202,10 @@ def intent_schema(context):
         "presentation_hint": _choice(PRESENTATIONS),
         "response_language": _choice(LANGUAGES, nullable=False),
         "dataset_id": _choice(tuple(item.dataset_id for item in context.dynamic_datasets)),
-        "dynamic_operation": _choice((*DYNAMIC_FINANCIAL_OPERATIONS, *DYNAMIC_ANOMALY_OPERATIONS)),
+        "dynamic_operation": _choice((*ALL_DYNAMIC_FINANCIAL_OPERATIONS, *DYNAMIC_ANOMALY_OPERATIONS)),
         "period_granularity": _choice(PERIOD_GRANULARITIES),
         "missing_dimension": _choice(MISSING_DIMENSION_POLICIES),
+        "as_of_date": {"type": ["string", "null"], "pattern": r"^\d{4}-\d{2}-\d{2}$"},
     }
     return {"type": "object", "properties": properties, "required": list(properties),
             "additionalProperties": False}
