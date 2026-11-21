@@ -16,6 +16,13 @@ from src.database.validation import validate_database
 
 SUPPORTED_PYTHON = (3, 14)
 DEFAULT_DATABASE = Path("data/database/financial_manager.db")
+REQUIRED_PACKAGES = (
+    "fastapi==0.165.0",
+    "pydantic==2.14.4",
+    "uvicorn==0.54.0",
+    "python-multipart==0.0.34",
+    "httpx==0.28.1",
+)
 
 
 def required_paths(project_root):
@@ -62,7 +69,7 @@ def _environment_metadata(root):
         "python_minor_matches": minor_matches,
         "requirements_file": "requirements.txt",
         "third_party_packages": packages,
-        "passed": minor_matches and not packages,
+        "passed": minor_matches and tuple(packages) == REQUIRED_PACKAGES,
     }
 
 
@@ -104,7 +111,7 @@ def validate_environment(project_root, *, database_path=None):
             "passed": python_ok,
         },
         "dependencies": {
-            "runtime": "Python standard library and repository source only",
+            "runtime": "Pinned Phase 3 local ASGI dependencies plus repository source",
             "passed": False,
         },
         "environment_metadata": environment_metadata,
@@ -131,6 +138,7 @@ def validate_environment(project_root, *, database_path=None):
     try:
         importlib.import_module("src.cli.main")
         importlib.import_module("src.manager")
+        importlib.import_module("src.api")
         report["cli"]["importable"] = True
         report["dependencies"]["passed"] = True
     except (ImportError, OSError) as exc:

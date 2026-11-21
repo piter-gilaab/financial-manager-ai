@@ -7,10 +7,11 @@ exercise.
 ## Prerequisites and Python environment
 
 Use Python **3.14**. The validated patch version is **3.14.7**, recorded in
-`.python-version`. The operational CLI, SQLite builder, validator, and unittest
-suite use only the Python standard library and repository source. Historical
-notebooks used Pandas/Jupyter, but notebook reproduction is outside the V1 runtime
-and is not required to build the database from the approved processed run.
+`.python-version`. The V1 Core, CLI and SQLite builder remain independent of HTTP
+imports. The V2 Phase 3 local API adds the exactly pinned FastAPI/Pydantic/ASGI
+dependencies in `requirements.txt`. Historical notebooks used Pandas/Jupyter,
+but notebook reproduction is outside the runtime and is not required to build
+the database from the approved processed run.
 
 ```sh
 python3.14 -m venv .venv
@@ -19,9 +20,11 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-`requirements.txt` intentionally contains no installable packages. Do not create
-or commit `.venv`; it is Git-ignored. The pip upgrade is the only command here
-that can contact a package index and is optional for this zero-dependency V1.
+`requirements.txt` pins `fastapi==0.165.0`, `pydantic==2.14.4`,
+`uvicorn==0.54.0`, `python-multipart==0.0.34` and test transport
+`httpx==0.28.1`. Do not create or commit `.venv`; it is Git-ignored. Dependency
+installation can contact the configured package index. Core/CLI execution does
+not import the API package unless the API is explicitly used.
 
 ## Required data
 

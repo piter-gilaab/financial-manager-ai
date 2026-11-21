@@ -1,2 +1,9 @@
-# The V1 CLI, database builder, provisioning validator, and unittest suite use
-# only the Python 3.14 standard library and repository source code.
+# V1 core/CLI modules remain independent of HTTP imports. Phase 3 pins the
+# local ASGI adapter dependencies exactly for reproducible CPython 3.14 setup.
+fastapi==0.165.0
+pydantic==2.14.4
+uvicorn==0.54.0
+python-multipart==0.0.34
+
+# ASGI in-process transport used by the Phase 3 HTTP test suite.
+httpx==0.28.1
