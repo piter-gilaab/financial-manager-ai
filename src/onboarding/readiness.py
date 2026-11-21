@@ -9,7 +9,7 @@ from .semantics import SemanticMapping
 
 
 _DYNAMIC_ANALYSIS_LIMITATIONS = (
-    "Only the fixed nine-operation SALES_RECORD catalog is available.",
+    "Only the fixed SALES_RECORD, PAYABLE, RECEIVABLE and CASH_TRANSACTION catalogs are available.",
     "No arbitrary filters, measures, groupings or sorting are available.",
     "Dataset targeting requires an exact registered dataset_id.",
 )
@@ -177,29 +177,30 @@ class CapabilityDiscovery:
                 "FINANCIAL_ANALYSIS", "BLOCKED", "BLOCKED",
                 ("Confirmed ACCOUNTING_TRANSACTION date and AMOUNT semantics with valid values are required.",),
             )
-        if domain != "SALES_RECORD":
+        executable_domains = {"SALES_RECORD", "PAYABLE", "RECEIVABLE", "CASH_TRANSACTION"}
+        if domain not in executable_domains:
             reason = (f"Financial Analysis is not implemented for the recognized {domain or 'unapproved'} domain.",)
             return self._blocked("FINANCIAL_ANALYSIS", "BLOCKED", "BLOCKED", reason)
         if mapping.status != "SEMANTICALLY_APPROVED":
             return CapabilityReadiness(
                 "FINANCIAL_ANALYSIS", "BLOCKED", "BLOCKED",
                 "BLOCKED", "BLOCKED",
-                ("An approved SALES_RECORD mapping is required before execution readiness can be evaluated.",),
+                ("An approved executable-domain mapping is required before execution readiness can be evaluated.",),
                 _DYNAMIC_ANALYSIS_LIMITATIONS,
-                self._blocked_operations("Required dataset semantics are not approved."),
+                self._blocked_operations("Required dataset semantics are not approved.", domain),
             )
         if self.root is None:
             return CapabilityReadiness(
                 "FINANCIAL_ANALYSIS", "BLOCKED_NOT_IMPLEMENTED", "READY", "READY", "BLOCKED",
-                ("Semantics are sufficient, but no generic execution adapter context was supplied for readiness evaluation.",),
+                ("No generic execution adapter context was supplied; execution is not implemented for this readiness evaluation.",),
                 _DYNAMIC_ANALYSIS_LIMITATIONS,
-                self._blocked_operations("Execution infrastructure is unavailable."),
+                self._blocked_operations("Execution infrastructure is unavailable.", domain),
             )
         operations = self._operation_readiness(mapping)
         if any(item.state == "SUPPORTED" for item in operations):
             return CapabilityReadiness(
                 "FINANCIAL_ANALYSIS", "AVAILABLE_WITH_LIMITATIONS", "READY", "READY", "READY",
-                ("At least one bounded SALES_RECORD operation passed binding and adapter validation.",),
+                ("At least one bounded domain operation passed binding and adapter validation.",),
                 _DYNAMIC_ANALYSIS_LIMITATIONS,
                 operations,
             )
@@ -213,13 +214,18 @@ class CapabilityDiscovery:
             "READY",
             "READY",
             "BLOCKED",
-            ("No bounded SALES_RECORD operation currently passes execution validation.",),
+            ("No bounded domain operation currently passes execution validation.",),
             _DYNAMIC_ANALYSIS_LIMITATIONS,
             operations,
         )
 
     def _operation_readiness(self, mapping: SemanticMapping) -> tuple[OperationReadiness, ...]:
-        from src.execution.binding import DynamicQueryRequest, dynamic_operation_bindings
+        from src.execution.binding import (
+            DynamicQueryParameters,
+            DynamicQueryRequest,
+            dynamic_operation_bindings,
+        )
+        from src.multidomain_financial import AS_OF_OPERATIONS
 
         binder = self._binder_factory(
             self.root,
@@ -233,6 +239,10 @@ class CapabilityDiscovery:
             bound = binder.bind(DynamicQueryRequest(
                 dataset_id=mapping.dataset_id,
                 operation=identifier,
+                parameters=DynamicQueryParameters(
+                    as_of_date=(mapping.qualifiers.get("dataset_reference_date")
+                                if binding.operation in AS_OF_OPERATIONS else None),
+                ),
             ))
             if not bound.bound:
                 readiness.append(OperationReadiness(
@@ -264,12 +274,14 @@ class CapabilityDiscovery:
         return tuple(readiness)
 
     @staticmethod
-    def _blocked_operations(reason: str) -> tuple[OperationReadiness, ...]:
+    def _blocked_operations(
+        reason: str, domain: str = "SALES_RECORD",
+    ) -> tuple[OperationReadiness, ...]:
         from src.execution.binding import dynamic_operation_bindings
 
         return tuple(OperationReadiness(
             item.operation.value, "BLOCKED", item.required_roles, (reason,),
-        ) for item in dynamic_operation_bindings("SALES_RECORD")
+        ) for item in dynamic_operation_bindings(domain)
         )
 
     def _anomaly(self, profile: DatasetProfile, mapping: SemanticMapping) -> CapabilityReadiness:

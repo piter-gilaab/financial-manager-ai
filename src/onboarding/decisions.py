@@ -1,7 +1,7 @@
 """Append-oriented user semantic decisions; suggestions never approve themselves."""
 
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import re
 from typing import Callable
 
@@ -16,9 +16,13 @@ CANONICAL_DOMAINS = (
 _REQUIRED_ROLES = {
     "SALES_RECORD": frozenset({"TRANSACTION_DATE", "SALES"}),
     "ACCOUNTING_TRANSACTION": frozenset({"POSTING_DATE", "AMOUNT"}),
-    "PAYABLE": frozenset({"INVOICE_ID", "SUPPLIER", "DUE_DATE", "AMOUNT", "STATUS"}),
+    "PAYABLE": frozenset({"DUE_DATE", "AMOUNT"}),
+    "RECEIVABLE": frozenset({"DUE_DATE", "AMOUNT"}),
+    "CASH_TRANSACTION": frozenset({"TRANSACTION_DATE", "AMOUNT", "CASH_DIRECTION"}),
 }
-_CRITICAL_VALUE_ROLES = {"DEBIT_CREDIT_INDICATOR", "CASH_DIRECTION", "ACTUAL_BUDGET_INDICATOR"}
+_CRITICAL_VALUE_ROLES = {
+    "DEBIT_CREDIT_INDICATOR", "CASH_DIRECTION", "ACTUAL_BUDGET_INDICATOR",
+}
 _ISO_CURRENCY = re.compile(r"^[A-Z]{3}$")
 
 
@@ -127,6 +131,58 @@ class SemanticDecisionService:
         )
         return replace(result, mapping_digest=self._digest(result))
 
+    def confirm_qualifiers(
+        self, mapping: SemanticMapping, *, evidence: str,
+        amount_basis: str | None = None,
+        dataset_reference_date: str | None = None,
+        cash_amount_convention: str | None = None,
+    ) -> SemanticMapping:
+        """Record only the frozen dataset-level semantic qualifiers."""
+        self._evidence(evidence)
+        supplied = {
+            key: value for key, value in {
+                "amount_basis": amount_basis,
+                "dataset_reference_date": dataset_reference_date,
+                "cash_amount_convention": cash_amount_convention,
+            }.items() if value is not None
+        }
+        if not supplied:
+            raise OnboardingError("semantic_qualifier_required")
+        if amount_basis is not None and amount_basis != "OUTSTANDING_BALANCE":
+            raise OnboardingError("invalid_amount_basis")
+        if dataset_reference_date is not None:
+            if type(dataset_reference_date) is not str:
+                raise OnboardingError("invalid_dataset_reference_date")
+            try:
+                if date.fromisoformat(dataset_reference_date).isoformat() != dataset_reference_date:
+                    raise ValueError
+            except ValueError:
+                raise OnboardingError("invalid_dataset_reference_date") from None
+        if (cash_amount_convention is not None
+                and cash_amount_convention not in {
+                    "MAGNITUDE_WITH_DIRECTION", "SIGNED_WITH_DIRECTION",
+                }):
+            raise OnboardingError("invalid_cash_amount_convention")
+        version = mapping.mapping_version + 1
+        qualifiers = dict(mapping.qualifiers)
+        qualifiers.update(supplied)
+        record = {
+            "decision": "CONFIRM_QUALIFIERS",
+            "timestamp": _utc_text(self.clock()),
+            "mapping_version": version,
+            "qualifiers": supplied,
+            "evidence": evidence,
+            "authority_source": "USER",
+        }
+        result = replace(
+            mapping,
+            mapping_version=version,
+            mapping_digest="",
+            qualifiers=qualifiers,
+            decisions=(*mapping.decisions, record),
+        )
+        return replace(result, mapping_digest=self._digest(result))
+
     def stop(self, mapping: SemanticMapping, *, reject: bool, evidence: str) -> SemanticMapping:
         self._evidence(evidence)
         version = mapping.mapping_version + 1
@@ -168,13 +224,15 @@ class SemanticDecisionService:
             raise OnboardingError("invalid_value_mapping")
         if role == "CASH_DIRECTION" and set(normalized.values()) - {"INFLOW", "OUTFLOW"}:
             raise OnboardingError("invalid_value_mapping")
+        if role == "STATUS" and set(normalized.values()) - {"OPEN", "SETTLED", "CANCELLED"}:
+            raise OnboardingError("invalid_value_mapping")
         if role == "ACTUAL_BUDGET_INDICATOR" and set(normalized.values()) - {"ACTUAL", "BUDGET"}:
             raise OnboardingError("invalid_value_mapping")
         if role == "CURRENCY":
             if any(not _ISO_CURRENCY.fullmatch(source) or not _ISO_CURRENCY.fullmatch(target)
                    for source, target in normalized.items()):
                 raise OnboardingError("invalid_currency_evidence")
-        if role in {*_CRITICAL_VALUE_ROLES, "CURRENCY"}:
+        if role in {*_CRITICAL_VALUE_ROLES, "CURRENCY", "STATUS"}:
             if not observed_values:
                 raise OnboardingError("critical_values_unavailable")
             if set(normalized) != set(observed_values):

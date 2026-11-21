@@ -251,7 +251,12 @@ class SafeFileIngestor:
                             for name, target, rows, numbers in parsed_sheets if rows]
                 if selected_sheet is None:
                     if len(nonempty) != 1:
-                        raise OnboardingError("sheet_selection_required" if nonempty else "empty_file")
+                        if nonempty:
+                            raise OnboardingError(
+                                "sheet_selection_required",
+                                details={"choices": [name for name, *_ in nonempty]},
+                            )
+                        raise OnboardingError("empty_file")
                     name, _, parsed, row_numbers = nonempty[0]
                 else:
                     matches = [(name, rows, numbers) for name, _, rows, numbers in parsed_sheets

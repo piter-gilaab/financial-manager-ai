@@ -120,6 +120,20 @@ class DatasetRegistry:
                 and (item / "current.json").is_file())
         ))
 
+    def current_workflow_ids(self) -> tuple[str, ...]:
+        """Return safe exact identifiers for current onboarding workflows."""
+        directory = self.root / "workflows"
+        try:
+            candidates = tuple(directory.iterdir())
+        except (FileNotFoundError, OSError):
+            return ()
+        return tuple(sorted(
+            item.name for item in candidates
+            if (re_dataset_id(item.name) and not item.is_symlink() and item.is_dir()
+                and not (item / "current.json").is_symlink()
+                and (item / "current.json").is_file())
+        ))
+
     def save_workflow(self, state: dict[str, Any]) -> None:
         dataset_id = state.get("dataset_id")
         if not re_dataset_id(dataset_id):
@@ -210,11 +224,20 @@ class DatasetRegistry:
                 continue
             if proposal.approved_format is None:
                 raise OnboardingError("date_format_required")
-            parsed = [
-                normalize_date(row[indexes[proposal.source_column]], proposal.approved_format)
-                for row in dataset.rows
-                if not is_missing_value(row[indexes[proposal.source_column]])
-            ]
+            parsed = []
+            for row in dataset.rows:
+                raw = row[indexes[proposal.source_column]]
+                if is_missing_value(raw):
+                    continue
+                try:
+                    parsed.append(normalize_date(raw, proposal.approved_format))
+                except OnboardingError as error:
+                    if error.code != "canonical_parse_failure":
+                        raise
+                    if mapping.approved_domain not in {
+                        "PAYABLE", "RECEIVABLE", "CASH_TRANSACTION",
+                    }:
+                        raise
             if parsed:
                 date_values.append((min(parsed), max(parsed)))
         observed_range = (

@@ -64,6 +64,10 @@ class OnboardingManager:
         """Return opaque current registry identifiers without exposing artifacts."""
         return self._registry.current_dataset_ids()
 
+    def dataset_ids(self) -> tuple[str, ...]:
+        """Return exact current onboarding workflow identifiers in stable order."""
+        return self._registry.current_workflow_ids()
+
     def profile(self, dataset_id: str) -> dict:
         return self._profile(dataset_id).to_dict()
 
@@ -85,6 +89,16 @@ class OnboardingManager:
         )
         return self._after_mapping(dataset_id, updated)
 
+    def decide(self, dataset_id: str, column: str, decision: str, *, evidence: str,
+               role: str | None = None, value_mapping: dict[str, str] | None = None,
+               date_format: str | None = None) -> dict:
+        """Record one exact closed semantic decision through the existing authority."""
+        updated = self._decisions.decide(
+            self._mapping(dataset_id), column=column, decision=decision, role=role,
+            evidence=evidence, value_mapping=value_mapping, date_format=date_format,
+        )
+        return self._after_mapping(dataset_id, updated)
+
     def reject(self, dataset_id: str, column: str, *, evidence: str) -> dict:
         updated = self._decisions.decide(
             self._mapping(dataset_id), column=column, decision="REJECT", evidence=evidence,
@@ -94,6 +108,20 @@ class OnboardingManager:
     def confirm_domain(self, dataset_id: str, domain: str, *, evidence: str) -> dict:
         updated = self._decisions.approve_domain(
             self._mapping(dataset_id), domain=domain, evidence=evidence,
+        )
+        return self._after_mapping(dataset_id, updated)
+
+    def confirm_qualifiers(
+        self, dataset_id: str, *, evidence: str,
+        amount_basis: str | None = None,
+        dataset_reference_date: str | None = None,
+        cash_amount_convention: str | None = None,
+    ) -> dict:
+        updated = self._decisions.confirm_qualifiers(
+            self._mapping(dataset_id), evidence=evidence,
+            amount_basis=amount_basis,
+            dataset_reference_date=dataset_reference_date,
+            cash_amount_convention=cash_amount_convention,
         )
         return self._after_mapping(dataset_id, updated)
 

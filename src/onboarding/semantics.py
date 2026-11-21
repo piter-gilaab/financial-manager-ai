@@ -1,6 +1,6 @@
 """Closed-ontology semantic suggestions over deterministic profiles."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import hashlib
 import json
 import re
@@ -17,7 +17,7 @@ SEMANTIC_ROLES = (
     "ACCOUNT", "CATEGORY", "DEBIT_CREDIT_INDICATOR", "VOUCHER_TYPE", "DEPARTMENT", "ENTITY",
     "COUNTRY", "SEGMENT", "PRODUCT", "UNITS_SOLD", "SALES", "PROFIT", "DISCOUNT",
     "GROSS_SALES", "COGS", "SALE_PRICE", "MANUFACTURING_PRICE", "INVOICE_ID", "SUPPLIER",
-    "STATUS", "ACTUAL_BUDGET_INDICATOR", "CASH_DIRECTION", "BALANCE",
+    "STATUS", "ACTUAL_BUDGET_INDICATOR", "CASH_DIRECTION", "BALANCE", "CUSTOMER",
 )
 SEMANTIC_ROLE_VALUE_KINDS = {
     "SALES": "MONETARY_AMOUNT",
@@ -79,6 +79,8 @@ _ALIASES = {
     "manufacturing_price": ("MANUFACTURING_PRICE", "HIGH"),
     "invoice_id": ("INVOICE_ID", "HIGH"),
     "supplier": ("SUPPLIER", "HIGH"),
+    "customer": ("CUSTOMER", "HIGH"),
+    "customer_name": ("CUSTOMER", "HIGH"),
     "status": ("STATUS", "HIGH"),
     "actual_budget": ("ACTUAL_BUDGET_INDICATOR", "MEDIUM"),
     "cash_direction": ("CASH_DIRECTION", "HIGH"),
@@ -144,6 +146,7 @@ class SemanticMapping:
     currency_state: str
     confirmed_currency: str | None
     decisions: tuple[dict[str, Any], ...] = ()
+    qualifiers: dict[str, str] = field(default_factory=dict)
 
     def proposal(self, column: str) -> SemanticProposal:
         for item in self.proposals:
@@ -165,6 +168,7 @@ class SemanticMapping:
             "currency_state": self.currency_state,
             "confirmed_currency": self.confirmed_currency,
             "decisions": list(self.decisions),
+            "qualifiers": dict(self.qualifiers),
         }
 
 
@@ -210,6 +214,10 @@ class SemanticMapper:
             domains.append("ACCOUNTING_TRANSACTION")
         if {"INVOICE_ID", "SUPPLIER", "DUE_DATE", "AMOUNT", "STATUS"} <= roles:
             domains.append("PAYABLE")
+        if {"CUSTOMER", "DUE_DATE", "AMOUNT"} <= roles:
+            domains.append("RECEIVABLE")
+        if {"TRANSACTION_DATE", "AMOUNT", "CASH_DIRECTION"} <= roles:
+            domains.append("CASH_TRANSACTION")
         mapping = SemanticMapping(
             status="NEEDS_CONFIRMATION",
             dataset_id=profile.dataset_id,
@@ -357,6 +365,7 @@ def mapping_from_dict(payload: dict[str, Any]) -> SemanticMapping:
             "proposals": proposals,
             "domain_suggestions": tuple(payload["domain_suggestions"]),
             "decisions": tuple(payload["decisions"]),
+            "qualifiers": dict(payload.get("qualifiers", {})),
         }))
     except (KeyError, TypeError, ValueError):
         from .models import OnboardingError

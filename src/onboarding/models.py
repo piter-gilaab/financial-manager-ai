@@ -11,10 +11,12 @@ INGESTION_CONTRACT_VERSION = "1.0"
 class OnboardingError(Exception):
     """A controlled onboarding failure with a stable, non-sensitive code."""
 
-    def __init__(self, code: str, message: str = "Dataset onboarding could not continue."):
+    def __init__(self, code: str, message: str = "Dataset onboarding could not continue.",
+                 *, details: dict[str, object] | None = None):
         super().__init__(message)
         self.code = code
         self.safe_message = message
+        self.details = details or {}
 
 
 @dataclass(frozen=True)
