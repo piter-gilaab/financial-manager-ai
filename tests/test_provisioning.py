@@ -59,12 +59,18 @@ class ProvisioningTests(unittest.TestCase):
         requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
         install_lines = [line for line in requirements.splitlines()
                          if line.strip() and not line.lstrip().startswith("#")]
-        self.assertEqual(install_lines, [])
+        self.assertEqual(install_lines, [
+            "fastapi==0.165.0",
+            "pydantic==2.14.4",
+            "uvicorn==0.54.0",
+            "python-multipart==0.0.34",
+            "httpx==0.28.1",
+        ])
         self.assertEqual(report["environment_metadata"], {
             "python_version_file": "3.14.7",
             "python_minor_matches": True,
             "requirements_file": "requirements.txt",
-            "third_party_packages": [],
+            "third_party_packages": install_lines,
             "passed": True,
         })
 
