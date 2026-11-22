@@ -4,6 +4,14 @@
 AGENTS
 skills-lock.json
 
+# Phase 4 web build and browser-test artifacts
+web/node_modules/
+web/.next/
+web/coverage/
+web/playwright-report/
+web/test-results/
+web/tsconfig.tsbuildinfo
+
 # Local credentials and editor state
 .aws/
 .idea/
