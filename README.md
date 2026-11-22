@@ -321,8 +321,26 @@ V2 Phase 3 is complete. A transport-neutral Application Layer and local
 FastAPI/Pydantic `/api/v1` adapter now expose safe onboarding, closed financial
 analysis, the two existing anomaly screens and process-local conversation while
 preserving Manager/Core authority. See the [Phase 3 summary](docs/v2_phase3_summary.md)
-and [API validation](docs/v2_api_validation.md). The web frontend/Next.js work
-has not started.
+and [API validation](docs/v2_api_validation.md).
+
+V2 Phase 4 is complete. The Next.js Institutional Financial Workspace under
+`web/` implements Overview, Datasets, explicit onboarding, four-domain analysis,
+Sales/Profit anomaly review and process-local Ask Financial Manager on top of
+the actual API. See the [Phase 4 summary](docs/v2_phase4_summary.md) and
+[web validation](docs/v2_web_validation.md).
+
+Start local development in two terminals:
+
+```sh
+# repository root
+FINANCIAL_API_CORS_ORIGINS=http://127.0.0.1:3000 .venv/bin/python -m src.api
+
+# second terminal
+cd web
+cp .env.example .env.local
+npm install
+npm run dev
+```
 
 Cash Flow Forecasting, Financial Document RAG, dynamic peer or multi-domain
 anomaly screening, arbitrary querying, ML/fraud models, SaaS, authentication,
@@ -341,11 +359,12 @@ remain outside mandatory V2.
 - [V2 Phase 1 architecture summary](docs/v2_phase1_summary.md)
 - [V2 Phase 2 implementation summary](docs/v2_phase2_summary.md)
 - [V2 Phase 3 application/API summary](docs/v2_phase3_summary.md)
+- [V2 Phase 4 web workspace summary](docs/v2_phase4_summary.md)
 
 ## Project status
 
 **Financial Manager AI V1 — COMPLETE.** Steps 1–73 and tag `v1.0.0` remain the
 frozen implemented baseline.
 
-**Financial Manager AI V2 — PHASE 3 APPLICATION/API COMPLETE.** Phase 4 is the
-next frozen phase and has not started.
+**Financial Manager AI V2 — PHASE 4 WEB FINANCIAL WORKSPACE COMPLETE.** Phase 5
+hardening/release is recommended next but has not started.

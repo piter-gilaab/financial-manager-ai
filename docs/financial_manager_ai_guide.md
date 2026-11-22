@@ -939,4 +939,11 @@ cash to Financial Core. Forecasting, RAG, SaaS/auth/multitenancy, PostgreSQL and
 new anomaly catalogs remain outside mandatory V2. Phase 3 now adds the
 transport-neutral Dataset/Analysis/Conversation application modules and local
 versioned FastAPI adapter without changing those authorities or catalogs.
-Phase 4 web work has not started.
+Phase 4 is complete. `web/` provides the Next.js Institutional Financial
+Workspace over the existing `/api/v1`: dataset-aware Overview, dataset list and
+detail, explicit CSV/XLSX onboarding, closed four-domain Financial Analysis,
+Sales/Profit candidate review and process-local Ask Financial Manager. Exact
+Decimal text, currency state, coverage, limitations and safe lineage remain
+visible; charts convert already-calculated values only for geometry. The
+frontend contains no financial/anomaly/readiness calculation and persists no
+transcript. Forecasting and Document Retrieval/RAG remain blocked/deferred.
