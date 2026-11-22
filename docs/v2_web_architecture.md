@@ -1,6 +1,6 @@
 # Financial Manager AI V2 — Web Financial Workspace Architecture
 
-Status: **FROZEN ARCHITECTURE — PHASE 4 IMPLEMENTATION PENDING**.
+Status: **IMPLEMENTED — PHASE 4 COMPLETE**.
 
 ## Technology
 
@@ -15,10 +15,10 @@ a coherent local production build. Official Next.js documentation provides
 and the current Next.js 16 upgrade contract requires
 [Node.js 20.9+ and TypeScript 5.1+](https://nextjs.org/docs/app/guides/upgrading/version-16).
 
-The host currently has Node/npm, but the repository has no frontend manifest or
-locked Node toolchain. Phase 4 must choose a then-supported Next.js release, pin a
-compatible Node LTS/package-manager/dependency lock and validate the local build.
-Phase 1 installs nothing and creates no frontend scaffold.
+The implemented workspace pins Next.js 16.4.6, React 19.3.1, TypeScript 5.9.3
+and Tailwind CSS 4.3.5 in `web/package-lock.json`. The OpenAPI schema is exported
+from the actual FastAPI factory and generates the TypeScript contract used by a
+single central HTTP client.
 
 ## Deployment shape
 
