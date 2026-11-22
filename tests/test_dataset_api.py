@@ -82,6 +82,13 @@ class DatasetApiTests(unittest.TestCase):
         )
         self.assertEqual(domain.status_code, 200, domain.text)
 
+        mappings = self.client.get(f"/api/v1/datasets/{dataset_id}/mappings")
+        self.assertEqual(mappings.status_code, 200, mappings.text)
+        self.assertEqual(
+            [item["decision"] for item in mappings.json()["data"]["decisions"][-2:]],
+            ["CONFIRM_QUALIFIERS", "APPROVE_DOMAIN"],
+        )
+
         readiness = self.client.get(f"/api/v1/datasets/{dataset_id}/readiness")
         self.assertEqual(readiness.status_code, 200)
         analysis = next(item for item in readiness.json()["data"]["capabilities"]

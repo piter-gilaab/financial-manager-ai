@@ -9,6 +9,7 @@ import unittest
 import httpx
 
 from src.api import create_app
+from src.api.__main__ import _development_cors_origins
 from src.api.serialization import to_json_safe
 
 
@@ -149,6 +150,16 @@ class ApiFoundationTests(unittest.TestCase):
                          "http://127.0.0.1:3000")
         with self.assertRaises(ValueError):
             create_app(onboarding_root=self.root, cors_origins=("*",))
+
+    def test_development_cors_environment_accepts_only_explicit_loopback_origins(self):
+        self.assertEqual(_development_cors_origins(None), ())
+        self.assertEqual(
+            _development_cors_origins("http://127.0.0.1:3000,http://localhost:3000/"),
+            ("http://127.0.0.1:3000", "http://localhost:3000"),
+        )
+        for unsafe in ("*", "https://example.com", "http://127.0.0.1:3000/path"):
+            with self.subTest(unsafe=unsafe), self.assertRaises(ValueError):
+                _development_cors_origins(unsafe)
 
     def test_programming_key_error_is_a_safe_500_not_a_false_404(self):
         class BrokenAnalysis:
