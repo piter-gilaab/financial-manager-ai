@@ -169,6 +169,25 @@ class SemanticDecisionResponse(StrictSchema):
     value_mapping: dict[str, str] | None
 
 
+class DomainDecisionResponse(StrictSchema):
+    approved_domain: str
+    authority_source: str
+    decision: str
+    evidence: str
+    mapping_version: int
+    previous_domain: str | None
+    timestamp: str
+
+
+class QualifierDecisionResponse(StrictSchema):
+    authority_source: str
+    decision: str
+    evidence: str
+    mapping_version: int
+    qualifiers: dict[str, str]
+    timestamp: str
+
+
 class SemanticMappingResponse(StrictSchema):
     dataset_id: DatasetId
     status: str
@@ -179,7 +198,7 @@ class SemanticMappingResponse(StrictSchema):
     currency_state: str
     confirmed_currency: str | None
     proposals: list[SemanticProposalResponse]
-    decisions: list[SemanticDecisionResponse]
+    decisions: list[SemanticDecisionResponse | DomainDecisionResponse | QualifierDecisionResponse]
     qualifiers: dict[str, str]
     unresolved_requirements: list[str]
 
