@@ -55,7 +55,7 @@ class ProvisioningTests(unittest.TestCase):
             )
 
         self.assertEqual((ROOT / ".python-version").read_text(encoding="utf-8"),
-                         "3.14.7\n")
+                         "3.14.8\n")
         requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
         install_lines = [line for line in requirements.splitlines()
                          if line.strip() and not line.lstrip().startswith("#")]
@@ -67,7 +67,7 @@ class ProvisioningTests(unittest.TestCase):
             "httpx==0.28.1",
         ])
         self.assertEqual(report["environment_metadata"], {
-            "python_version_file": "3.14.7",
+            "python_version_file": "3.14.8",
             "python_minor_matches": True,
             "requirements_file": "requirements.txt",
             "third_party_packages": install_lines,

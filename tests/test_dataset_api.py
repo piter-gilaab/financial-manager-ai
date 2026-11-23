@@ -28,10 +28,11 @@ class DatasetApiTests(unittest.TestCase):
         )
 
     def test_csv_upload_list_detail_profile_and_mappings_are_safe(self):
-        uploaded = self.upload()
+        uploaded = self.upload("customer-sales.csv")
         self.assertEqual(uploaded.status_code, 201)
         payload = uploaded.json()["data"]
         dataset_id = payload["dataset"]["dataset_id"]
+        self.assertEqual(payload["dataset"]["source_filename"], "customer-sales.csv")
         self.assertEqual(payload["profile"]["row_count"], 1)
         self.assertEqual(payload["mappings"]["status"], "NEEDS_CONFIRMATION")
 
