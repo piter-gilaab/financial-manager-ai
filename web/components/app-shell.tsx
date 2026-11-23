@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BarChart3, Database, LayoutDashboard, Menu, MessageSquareText, ShieldCheck, X } from "lucide-react";
+import { Activity, BarChart3, Database, LayoutDashboard, Menu, MessageSquareText, X } from "lucide-react";
 import { useWorkspace } from "./workspace-provider";
+import { displayDomain } from "@/lib/presentation";
 
 const NAV = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
@@ -13,6 +14,13 @@ const NAV = [
   { href: "/anomalies", label: "Anomalies", icon: Activity },
   { href: "/chat", label: "Ask Financial Manager", icon: MessageSquareText },
 ];
+
+function FinancialManagerMark() {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none">
+    <path d="M5.5 6.5h13M5.5 11.5h7M5.5 16.5h4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="m13 17 2.2-2.2 1.6 1.5 2.7-3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>;
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -52,9 +60,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [open, isMobile, closeNavigation]);
 
   return <div className="app-shell">
+    <a className="skip-link" href="#main-content">Skip to main content</a>
     {open && <button className="nav-backdrop" aria-label="Close navigation" tabIndex={-1} onClick={closeNavigation} />}
     <aside ref={sidebar} className={`sidebar ${open ? "open" : ""}`} aria-label="Workspace navigation" aria-hidden={isMobile && !open ? true : undefined} inert={isMobile && !open ? true : undefined} role={isMobile ? "dialog" : undefined} aria-modal={isMobile && open ? true : undefined}>
-      <div className="brand"><span className="brand-mark"><ShieldCheck size={15} /></span><span>Financial Manager AI</span></div>
+      <div className="brand"><span className="brand-mark"><FinancialManagerMark /></span><span>Financial Manager AI</span></div>
       <div className="nav-label">Workspace</div>
       <nav className="nav-list" aria-label="Primary navigation">
         {NAV.map(({ href, label, icon: Icon }) => {
@@ -68,10 +77,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="topbar-context">
         <button ref={menuButton} className="button button-ghost icon-button mobile-trigger" onClick={() => setOpen((value) => !value)} aria-label={open ? "Close navigation" : "Open navigation"} aria-expanded={open}>{open ? <X size={18} /> : <Menu size={18} />}</button>
         <div><span className="micro">Dataset context</span><div className="context-dataset" title={selectedDataset?.dataset_id}>{selectedDataset ? selectedDataset.source_filename : "No dataset selected"}</div></div>
-        {selectedDataset?.approved_domain && <span className="badge">{selectedDataset.approved_domain}</span>}
+        {selectedDataset?.approved_domain && <span className="badge">{displayDomain(selectedDataset.approved_domain)}</span>}
       </div>
-      <div className="api-health" role="status" aria-live="polite"><span className={`health-dot ${health}`} />API {health === "checking" ? "checking" : health === "healthy" ? "Healthy" : "unavailable"}</div>
+      <div className="api-health" role="status" aria-live="polite" aria-label={`API ${health === "checking" ? "checking" : health === "healthy" ? "healthy" : "unavailable"}`}><span className={`health-dot ${health}`} /><span className="api-health-label">API {health === "checking" ? "checking" : health === "healthy" ? "Healthy" : "unavailable"}</span></div>
     </header>
-    <main className="workspace" id="main-content" inert={isMobile && open ? true : undefined}><div className="workspace-inner">{children}</div></main>
+    <main className="workspace" id="main-content" tabIndex={-1} inert={isMobile && open ? true : undefined}><div className="workspace-inner">{children}</div></main>
   </div>;
 }

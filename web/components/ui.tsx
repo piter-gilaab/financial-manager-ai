@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { AlertCircle, Ban, CircleHelp, Database, LoaderCircle, TriangleAlert } from "lucide-react";
+import { forwardRef } from "react";
+import { displayStatus } from "@/lib/presentation";
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes } from "react";
 
 export function Button({ variant = "primary", className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" }) {
@@ -16,12 +18,7 @@ export function Badge({ children, tone }: { children: React.ReactNode; tone?: st
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const labels: Record<string, string> = {
-    CLARIFICATION_REQUIRED: "Requires confirmation",
-    DATA_QUALITY_BLOCKER: "Blocked",
-    API_UNAVAILABLE: "API unavailable",
-  };
-  return <Badge tone={status}>{labels[status] || status.replaceAll("_", " ")}</Badge>;
+  return <Badge tone={status}>{displayStatus(status)}</Badge>;
 }
 
 export function Panel({ children, className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
@@ -41,10 +38,12 @@ export function PageHeader({ title, description, action, eyebrow }: { title: str
 }
 
 export function Field({ label, htmlFor, help, error, children }: { label: string; htmlFor: string; help?: string; error?: string; children: React.ReactNode }) {
-  return <div className="field"><label htmlFor={htmlFor}>{label}</label>{children}{help && <span className="field-help">{help}</span>}{error && <span className="field-error" id={`${htmlFor}-error`}>{error}</span>}</div>;
+  return <div className="field"><label htmlFor={htmlFor}>{label}</label>{children}{help && <span className="field-help" id={`${htmlFor}-help`}>{help}</span>}{error && <span className="field-error" id={`${htmlFor}-error`}>{error}</span>}</div>;
 }
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) { return <input className="input" {...props} />; }
+export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(props, ref) {
+  return <input ref={ref} className="input" {...props} />;
+});
 export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) { return <select className="select" {...props} />; }
 
 export function LoadingState({ label = "Loading workspace data" }: { label?: string }) {
@@ -63,4 +62,8 @@ export function EmptyState({ title, description, action, kind = "database" }: { 
 
 export function SafeJson({ value }: { value: unknown }) {
   return <pre className="code-grid">{JSON.stringify(value, null, 2)}</pre>;
+}
+
+export function TechnicalDetails({ children, summary = "Technical details" }: { children: React.ReactNode; summary?: string }) {
+  return <details className="technical-details"><summary>{summary}</summary><div className="technical-details-body">{children}</div></details>;
 }
