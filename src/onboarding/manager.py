@@ -28,8 +28,14 @@ class OnboardingManager:
         )
 
     def add(self, source_path: Path | str, *, sheet: str | None = None,
-            provenance_note: str | None = None) -> dict:
-        dataset = self._ingestor.ingest(source_path, sheet=sheet, provenance_note=provenance_note)
+            provenance_note: str | None = None,
+            source_filename: str | None = None) -> dict:
+        dataset = self._ingestor.ingest(
+            source_path,
+            sheet=sheet,
+            provenance_note=provenance_note,
+            source_filename=source_filename,
+        )
         profile = self._profiler.profile(dataset)
         mapping = self._mapper.suggest(profile)
         self._registry.save_profile(profile)
