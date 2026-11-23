@@ -12,10 +12,11 @@ describe("analysis evidence renderer", () => {
 
   it("renders grouped dimension and measure coverage returned by the backend", () => {
     render(<EvidenceRenderer status="SUCCESS" evidence={{ delegated_result: { query_name: "PAYABLE_BY_SUPPLIER", currency: { status: "CONFIRMED", code: "BRL" }, result: { groups: [{ key: { value: "Vendor A", kind: "source_value" }, measures: { amount: { sum: "10.50" } } }], dimension_coverage: { population: 2, unavailable: 0 }, measure_coverage: { amount: { population: 2, used: 2 } } } } }} />);
-    expect(screen.getByLabelText("Presentation-only chart")).toBeVisible();
+    expect(screen.getByRole("img", { name: "Presentation view" })).toBeVisible();
+    expect(screen.getByRole("table", { name: "Exact authoritative evidence" })).toBeVisible();
     expect(screen.getByText("BRL")).toBeVisible();
-    expect(screen.getByText(/dimension_coverage/)).toBeVisible();
-    expect(screen.getByText(/10\.50/)).toBeVisible();
+    expect(screen.getByText("Dimension Coverage Population")).toBeVisible();
+    expect(screen.getByRole("cell", { name: /10\.50/ })).toBeVisible();
   });
 
   it("preserves mixed confirmed currency context without aggregating grouped values", () => {
@@ -27,7 +28,9 @@ describe("analysis evidence renderer", () => {
     render(<EvidenceRenderer status="PARTIAL" limitations={["Currency unverified"]} evidence={{ delegated_result: { query_name: "PAYABLE_SUMMARY", currency: { status: "UNKNOWN", code: null }, result: { measures: { amount: { sum: "10.50", coverage: { population: 3, used: 2, excluded: 1 } } } }, metadata: { lineage: { dataset_id: "ds_123" }, artifact_path: "/private/path" } } }} />);
     expect(screen.getByText(/10.50 · unverified source denomination/)).toBeVisible();
     expect(screen.getByText("Currency unverified")).toBeVisible();
-    expect(screen.getByText("Technical lineage and reproducibility")).toBeVisible();
+    const technicalDetails = screen.getByText("Technical details").closest("details");
+    expect(technicalDetails).not.toHaveAttribute("open");
+    expect(screen.getByText("Lineage and reproducibility")).not.toBeVisible();
   });
 
   it("removes private filesystem path fields from technical evidence", () => {
