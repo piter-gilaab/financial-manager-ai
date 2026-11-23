@@ -1,26 +1,34 @@
 # Financial Manager AI — Technical Guide
 
-This is the primary learning guide to the implemented local V1. It connects the
-specialized documents to their source code; it does not replace query contracts
-or historical validation reports. The frozen scope is recorded in
-[the V1 scope freeze](v1_scope_freeze.md), and current final regression evidence
-is recorded in [Step 71 validation](step71_validation.md). Operational setup and
-examples are in the [V1 usage guide](v1_usage_guide.md), and the bounded portfolio
-flow is in the [V1 demo walkthrough](v1_demo_walkthrough.md). Earlier step reports
-describe their own checkpoints, not today's total test count.
+This is the primary technical learning guide. Its original sections document the
+frozen V1 foundations in depth; V2 is now the current implemented product. V2
+adds generic `PAYABLE`, `RECEIVABLE` and `CASH_TRANSACTION` execution alongside
+`SALES_RECORD`, the transport-neutral Application Layer, local FastAPI `/api/v1`,
+the Next.js Financial Workspace and bounded multi-domain conversation without
+moving financial/statistical authority out of deterministic modules.
 
-The V1 implementation remains complete and frozen at tag `v1.0.0`. V2 Phase 1
-froze architecture/contracts and V2 Phase 2 now implements the approved
-multi-domain execution layer. See the [V2 scope](v2_scope.md),
-[roadmap](v2_roadmap.md), [Phase 1 summary](v2_phase1_summary.md) and
-[Phase 2 summary](v2_phase2_summary.md) and
-[Phase 3 summary](v2_phase3_summary.md). The local application/API layer is
-implemented; web work has not started.
+Start with the current [V2 scope authority](v2_scope_freeze.md),
+[V2 roadmap](v2_roadmap.md), [Phase 5 status](v2_phase5_summary.md) and
+[V2 usage guide](v2_usage_guide.md). V2 is an implemented release candidate with
+Phase 5 remediation functionally complete; the automated tasteskill gate remains
+inconclusive, so this is not yet the final V2 release. The complete V2 architecture is
+onboarding -> current readiness -> `FinancialManagerAgent` -> binder/adapter ->
+Financial Core/Anomaly Engine -> Application -> FastAPI -> Web/conversation.
+Exact Decimal strings, explicit currency/cash/aging semantics and artifact lineage
+survive every surface. The remediated state validates 773 backend, 42 frontend
+and 11 real-API Chromium tests plus typecheck, lint, production build, clean
+installs and offline-capable runtime. See
+[the Phase 5 remediation record](v2_phase5_release_remediation.md).
+
+V1 remains complete and frozen at tag `v1.0.0`; its sections and validation
+documents are retained as historical design evidence, not the current product
+status. Earlier step reports describe their own checkpoints, not today's totals.
 
 ## 1. Project purpose
 
-V1 answers supported descriptive questions about two supplied legacy financial
-datasets and approved dynamically onboarded `SALES_RECORD` datasets, and screens
+V2 answers supported descriptive questions about two supplied legacy financial
+datasets and approved dynamically onboarded datasets in the four frozen domains,
+and screens
 selected measures for statistical investigation candidates. Users can run local
 one-shot CLI commands or a bounded process-local chat. The software preserves
 source meaning, exact values, uncertainty and lineage instead of presenting every
@@ -28,7 +36,7 @@ number as a verified business fact.
 
 One Financial Manager composes deterministic data/financial services and
 interpretation/orchestration modules. Despite the project and class names,
-**the default V1 uses no LLM**: interpretation is bounded English grammar and
+**the default product uses no LLM**: interpretation is bounded English grammar and
 explanation is templated. Phase 12 adds an *optional* local LLM **mediator** for
 the interactive chat (`chat --llm-model …`, see section 16). It interprets
 natural English/Portuguese and explains results, but it is never the financial
@@ -910,6 +918,12 @@ dynamic anomaly operations and can resolve current A1–A10 candidate references
 for `why_selected` or bounded `record_detail`. Candidate meaning remains
 statistical only. Forecasting and Document Retrieval/RAG remain blocked.
 
+### Historical V1 context
+
+The following Phase 18 authorization statements describe the V1 release
+checkpoint only. They are not current instructions and do not override the V2
+scope authority above.
+
 **Phase 18 Steps 70–73 (complete):** V1 scope, catalogs, executable
 domains and authority boundaries are frozen. Final security, regression,
 performance, fresh-process and CLI validation passes with no unresolved release
@@ -923,12 +937,15 @@ AI V1 is complete; no Phase 19 or V2 implementation is authorized.
 document retrieval. Obtain authoritative representative sources and rerun readiness
 gates before approving implementation; neither a design nor a fixture is production evidence.
 
-**Future/V2 work, not authorized here:** measured usability/performance work when
+**Historical V1 future-work statement:** measured usability/performance work when
 actual workloads justify it; additional reviewed model providers; Forecasting;
 Document Retrieval/RAG; new executable domains; and deployment capabilities such
 as authentication, RBAC, egress controls, PostgreSQL, web/API and multi-user
 operation. These are not current registered capabilities and require separate
-evidence, scope and approval.
+evidence, scope and approval. This statement was superseded for the implemented
+V2 scope by `v2_scope_freeze.md`; its deferred capabilities remain deferred.
+
+### Current V2 implementation context
 
 **V2 Phases 1–2 (complete):** architecture is frozen and generic deterministic
 execution now supports exactly six operations each for `PAYABLE`, `RECEIVABLE`

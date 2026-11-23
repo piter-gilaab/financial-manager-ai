@@ -1,6 +1,11 @@
 # Financial Manager AI V2 — Frozen Product Scope
 
-Status: **FROZEN CONTRACT — IMPLEMENTATION PENDING**.
+Status: **FROZEN CONTRACT — IMPLEMENTED RELEASE CANDIDATE**.
+
+The concise implemented inventory and current authority is
+[the V2 scope freeze](v2_scope_freeze.md). Phase 5 release remediation may fix
+confirmed defects without changing the mandatory scope. The earlier acceptance
+record is a candidate baseline, not the current final release decision.
 
 This document defines the mandatory product scope of Financial Manager AI V2.
 It authorizes only the five phases in [the V2 roadmap](v2_roadmap.md). The V1

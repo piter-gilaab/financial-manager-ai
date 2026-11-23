@@ -20,6 +20,7 @@ private errors are stable. Forecasting and Document Retrieval/RAG remain blocked
 and have no endpoints. No frontend, Node, React or Next.js artifact was added.
 
 Validation passes 34 focused Phase 3 tests and the complete 772-test project
-regression. The next authorized roadmap phase is Phase 4 — Web Financial
-Workspace; it has not started.
+regression. At the close of Phase 3, the next authorized roadmap phase was Phase
+4. The Web Workspace has since completed. Phase 5 initial validation also ran and
+is now in release remediation; see [the Phase 5 summary](v2_phase5_summary.md).
 

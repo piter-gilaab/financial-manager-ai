@@ -1,6 +1,10 @@
 # Financial Manager AI V2 — Phase 1 Summary
 
-Status: **COMPLETE — FROZEN ARCHITECTURE; IMPLEMENTATION PENDING**.
+Status: **COMPLETE — HISTORICAL PHASE 1 ARCHITECTURE FREEZE**.
+
+The implementation target described here was subsequently completed. Its current
+state is a V2 release candidate undergoing Phase 5 remediation; the original
+acceptance document is a historical candidate baseline.
 
 ## Frozen product
 

@@ -26,5 +26,6 @@ parameters and oversized chat-evidence rendering.
 
 Frozen operation catalogs remain 9 SALES_RECORD, 6 PAYABLE, 6 RECEIVABLE, 6
 CASH_TRANSACTION and 2 dynamic anomaly screens. Forecasting and Document
-Retrieval/RAG remain blocked/deferred. Authentication, multitenancy, PostgreSQL
-and Phase 5 are not implemented.
+Retrieval/RAG remain blocked/deferred. Authentication, multitenancy and
+PostgreSQL remain unimplemented. Phase 5 initial validation has since run and is
+now in release remediation; see [the Phase 5 summary](v2_phase5_summary.md).

@@ -1,6 +1,6 @@
 # Financial Manager AI V2 — Frozen Roadmap
 
-Status: **FROZEN — FIVE PHASES**.
+Status: **PHASE 5 RELEASE REMEDIATION — FIVE PHASES, NO PHASE 6**.
 
 The V1 baseline is complete at tag `v1.0.0`. This roadmap governs V2 and creates
 no Phase 6. Each phase must preserve the authority, evidence and compatibility
@@ -77,6 +77,11 @@ Validate the complete product against the frozen acceptance criteria:
 
 Phase 5 may fix defects inside the frozen scope. It may not add a mandatory
 domain, operation, surface or sixth phase.
+
+The initial Phase 5 candidate gate recorded **PASS_WITH_LIMITATIONS** on
+2026-11-22. A subsequent frontend taste/accessibility audit reopened Phase 5 for
+release remediation. No sixth phase was created; see
+[the Phase 5 summary](v2_phase5_summary.md).
 
 ## Deferred work
 

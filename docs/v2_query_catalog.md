@@ -1,6 +1,6 @@
 # Financial Manager AI V2 — Closed Query Catalog
 
-Status: **FROZEN CONTRACT — PHASE 2 IMPLEMENTATION PENDING**.
+Status: **FROZEN CONTRACT — IMPLEMENTED; CATALOG CLOSED**.
 
 This catalog is exhaustive for the three new V2 executable domains. The nine V1
 `SALES_RECORD` Financial Analysis operations remain unchanged and are not
