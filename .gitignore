@@ -11,6 +11,10 @@ web/coverage/
 web/playwright-report/
 web/test-results/
 web/tsconfig.tsbuildinfo
+web/next-env.d.ts
+
+# Local frontend design/audit tooling
+.taste-skill/
 
 # Local credentials and editor state
 .aws/
@@ -38,8 +42,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -105,6 +109,9 @@ target/
 # IPython
 profile_default/
 ipython_config.py
+
+# Python local version (optional)
+.python-version
 
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
