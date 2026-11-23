@@ -39,7 +39,8 @@ class SafeFileIngestor:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
 
     def ingest(self, source_path: Path | str, *, sheet: str | None = None,
-               provenance_note: str | None = None) -> IngestedDataset:
+               provenance_note: str | None = None,
+               source_filename: str | None = None) -> IngestedDataset:
         source = Path(source_path)
         extension = source.suffix.lower()
         if extension not in {".csv", ".xlsx"}:
@@ -75,7 +76,7 @@ class SafeFileIngestor:
             status="INGESTED",
             dataset_id=dataset_id,
             ingestion_run_id=ingestion_run_id,
-            source_filename=source.name,
+            source_filename=source.name if source_filename is None else source_filename,
             detected_format=detected_format,
             source_sha256=digest,
             byte_size=len(data),

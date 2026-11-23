@@ -89,7 +89,10 @@ class DatasetApplication:
         if not path.is_file() or size > self._max_upload_bytes:
             raise OnboardingError("file_too_large")
         state = self._onboarding.add(
-            path, sheet=command.sheet, provenance_note=command.provenance_note,
+            path,
+            sheet=command.sheet,
+            provenance_note=command.provenance_note,
+            source_filename=command.filename,
         )
         return self.detail(state["dataset_id"])
 
