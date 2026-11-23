@@ -1,8 +1,9 @@
 import { withoutPrivatePaths } from "@/lib/evidence";
 import { isRecord } from "@/lib/types";
-import { SafeJson, StateMessage } from "./ui";
+import { humanize } from "@/lib/format";
+import { LinkButton, SafeJson, StateMessage, TechnicalDetails } from "./ui";
 
-const MAX_INLINE_EVIDENCE_CHARACTERS = 50_000;
+const MAX_INLINE_EVIDENCE_CHARACTERS = 12_000;
 
 function structuralProjection(value: unknown): unknown {
   if (!isRecord(value)) return value;
@@ -18,9 +19,13 @@ function structuralProjection(value: unknown): unknown {
 export function ChatEvidence({ value }: { value: unknown }) {
   const safe = withoutPrivatePaths(value);
   const serialized = JSON.stringify(safe);
-  if (serialized.length <= MAX_INLINE_EVIDENCE_CHARACTERS) return <SafeJson value={safe} />;
-  return <div className="stack" style={{ marginTop: 10, gap: 8 }}>
-    <StateMessage title="Large structured evidence returned" message="A bounded structural projection is shown here to keep the conversation responsive. Use the Analysis workspace for complete tabular evidence." />
-    <SafeJson value={structuralProjection(safe)} />
+  const projection = structuralProjection(safe);
+  const facts = isRecord(projection) ? Object.entries(projection).filter(([, item]) => item === null || ["string", "number", "boolean"].includes(typeof item)) : [];
+  const large = serialized.length > MAX_INLINE_EVIDENCE_CHARACTERS;
+  return <div className="chat-evidence-card">
+    <div><strong>Key evidence</strong>{facts.length ? <dl className="chat-evidence-facts">{facts.map(([key, item]) => <div key={key}><dt>{humanize(key)}</dt><dd>{String(item ?? "—")}</dd></div>)}</dl> : <p className="muted">Structured evidence was returned with this answer.</p>}</div>
+    {large && <StateMessage title="Large structured evidence returned" message="A bounded projection is kept here. Open Analysis for complete tabular evidence." />}
+    <div className="chat-evidence-actions"><LinkButton href="/analysis" variant="secondary">Open in Analysis</LinkButton></div>
+    <TechnicalDetails>{large ? <SafeJson value={projection} /> : <SafeJson value={safe} />}</TechnicalDetails>
   </div>;
 }
