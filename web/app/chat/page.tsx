@@ -5,9 +5,12 @@ import { MessageSquareText, Send } from "lucide-react";
 import { ApiClientError, api } from "@/lib/api-client";
 import type { SessionProjection } from "@/lib/types";
 import { useWorkspace } from "@/components/workspace-provider";
-import { ClarificationPrompt } from "@/components/workflow-controls";
+import { ClarificationPrompt, DatasetSelect } from "@/components/workflow-controls";
 import { ChatEvidence } from "@/components/chat-evidence";
-import { Button, EmptyState, Field, Input, PageHeader, Panel, PanelHeader, Select, StateMessage, StatusBadge } from "@/components/ui";
+import { Button, EmptyState, Field, Input, PageHeader, Panel, PanelHeader, StateMessage, StatusBadge } from "@/components/ui";
+import { displayDomain, displayStatus } from "@/lib/presentation";
+import { OPERATIONS } from "@/lib/operations";
+import { humanize } from "@/lib/format";
 
 interface Message {
   id: number;
@@ -50,7 +53,7 @@ export default function ChatPage() {
 
   const applyTurn = (data: { status: string; text: string | null; notice: string | null; outcome: { result?: unknown; error?: unknown; references?: { handle: string; kind: string }[] } | null }) => {
     const outcome = data.outcome;
-    append({ role: "manager", text: data.text || data.notice || data.status.replaceAll("_", " "), status: data.status, evidence: outcome?.result || outcome?.error, references: outcome?.references || [] });
+    append({ role: "manager", text: data.text || data.notice || displayStatus(data.status), status: data.status, evidence: outcome?.result || outcome?.error, references: outcome?.references || [] });
   };
 
   const send = async (event: FormEvent) => {
@@ -78,7 +81,7 @@ export default function ChatPage() {
     const value = clarification.trim(); setClarification(""); append({ role: "user", text: value }); setBusy(true);
     try {
       const response = await api.answer(session.session_id, value);
-      append({ role: "manager", text: response.data.status.replaceAll("_", " "), status: response.data.status, evidence: response.data.outcome.result || response.data.outcome.error, references: response.data.outcome.references });
+      append({ role: "manager", text: displayStatus(response.data.status), status: response.data.status, evidence: response.data.outcome.result || response.data.outcome.error, references: response.data.outcome.references });
       setSession(response.data.session);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Clarification could not be submitted."); }
     finally { setBusy(false); }
@@ -100,7 +103,7 @@ export default function ChatPage() {
   const sessionDataset = datasets.find((item) => item.dataset_id === sessionDatasetId) || null;
 
   return <>
-    <PageHeader title="Ask Financial Manager" description="Process-local conversation grounded in approved dataset context and backend evidence." />
+    <PageHeader title="Ask Financial Manager" description="Process-local conversation grounded in an explicitly selected, approved dataset." />
     <div className="chat-layout">
       <Panel className="conversation"><PanelHeader title="Conversation" subtitle={session ? "Runtime-only session · not authentication" : "Creating local session"} />
         <div className="messages" aria-live="polite" ref={messagesRef}>
@@ -112,8 +115,8 @@ export default function ChatPage() {
         <form className="composer" onSubmit={send}><Input aria-label="Financial question" placeholder="Show payables by supplier." value={message} onChange={(event) => setMessage(event.target.value)} maxLength={2000} disabled={!session || busy} /><Button type="submit" disabled={!session || !message.trim() || busy} aria-label="Send financial question"><Send size={16} /> Send</Button></form>
       </Panel>
       <aside className="chat-context"><Panel><PanelHeader title="Active context" subtitle="Explicit session selection" /><div className="panel-body stack">
-        <Field label="Dataset" htmlFor="chat-dataset"><Select id="chat-dataset" value={sessionDatasetId} onChange={(event) => void chooseDataset(event.target.value)} disabled={!session || busy}><option value="">No dataset selected</option>{datasets.map((dataset) => <option key={dataset.dataset_id} value={dataset.dataset_id}>{dataset.source_filename} · {dataset.dataset_id} · {dataset.approved_domain || "UNCONFIRMED"} · {dataset.readiness_state}</option>)}</Select></Field>
-        {sessionDataset ? <><div className="operation-row"><span>Domain</span><strong>{sessionDataset.approved_domain || "UNCONFIRMED"}</strong></div><div className="operation-row"><span>Readiness</span><StatusBadge status={sessionDataset.readiness_state} /></div><div><div className="eyebrow">Available capabilities</div>{sessionDataset.supported_operations.length ? sessionDataset.supported_operations.map((operation) => <div className="reason" key={operation}>{operation.replaceAll("_", " ")}</div>) : <p className="muted">No ready operations.</p>}</div></> : <StateMessage title="No active dataset" message="Choose an exact registered dataset. The selection is sent explicitly to the session and shown only after backend confirmation." />}
+        <Field label="Dataset" htmlFor="chat-dataset"><DatasetSelect id="chat-dataset" datasets={datasets} value={sessionDatasetId} onChange={(value) => void chooseDataset(value)} disabled={!session || busy} /></Field>
+        {sessionDataset ? <><div className="operation-row"><span>Domain</span><strong>{displayDomain(sessionDataset.approved_domain)}</strong></div><div className="operation-row"><span>Readiness</span><StatusBadge status={sessionDataset.readiness_state} /></div><div><div className="eyebrow">Available capabilities</div>{sessionDataset.supported_operations.length ? sessionDataset.supported_operations.map((operation) => <div className="reason" key={operation}>{OPERATIONS[operation]?.label || humanize(operation)}</div>) : <p className="muted">No ready operations.</p>}</div></> : <StateMessage title="No active dataset" message="Choose an exact registered dataset. The selection is sent explicitly to the session and shown only after system confirmation." />}
         <div className="micro"><MessageSquareText size={12} aria-hidden /> Refreshing may create a new process-local session. No transcript is stored in browser persistence.</div>
       </div></Panel></aside>
     </div>

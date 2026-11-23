@@ -6,8 +6,9 @@ import { ApiClientError, api } from "@/lib/api-client";
 import { OPERATIONS, operationIsExecutable } from "@/lib/operations";
 import type { AnalysisParameters, ExecutionEnvelope, Readiness, SemanticMapping } from "@/lib/types";
 import { humanize } from "@/lib/format";
+import { displayReason, displayStatus } from "@/lib/presentation";
 import { EvidenceRenderer } from "@/components/evidence-renderer";
-import { OperationSelect } from "@/components/workflow-controls";
+import { DatasetSelect, OperationSelect } from "@/components/workflow-controls";
 import { useWorkspace } from "@/components/workspace-provider";
 import { Button, EmptyState, Field, Input, LinkButton, PageHeader, Panel, PanelHeader, Select, StateMessage, StatusBadge } from "@/components/ui";
 
@@ -62,20 +63,20 @@ export default function AnalysisPage() {
   };
 
   return <>
-    <PageHeader title="Financial analysis" description="Closed operation controls and complete backend-authoritative evidence." />
+    <PageHeader title="Financial analysis" description="Run an approved operation and inspect its exact calculation evidence." />
     {loadingDatasets ? <Panel><div className="panel-body">Loading dataset catalog…</div></Panel> : datasets.length === 0 ? <Panel><EmptyState title="No datasets available" description="Onboard and approve a dataset before running financial analysis." action={<LinkButton href="/datasets/new">Add dataset</LinkButton>} /></Panel> : <div className="split-workspace">
       <Panel><PanelHeader title="Analysis controls" subtitle="Only API-approved options" /><div className="panel-body stack">
-        <Field label="Exact registered dataset" htmlFor="analysis-dataset"><Select id="analysis-dataset" value={datasetId} onChange={(event) => { setDatasetId(event.target.value); setResult(null); }}><option value="">Select dataset</option>{datasets.map((dataset) => <option key={dataset.dataset_id} value={dataset.dataset_id}>{dataset.source_filename} · {dataset.dataset_id} · {dataset.approved_domain || "UNCONFIRMED"} · {dataset.readiness_state}</option>)}</Select></Field>
-        <Field label="Operation" htmlFor="analysis-operation" help="Blocked operations remain visible with backend reasons."><OperationSelect options={operationItems} value={operation} onChange={(value) => { setOperation(value); setResult(null); }} /></Field>
-        {current && !operationIsExecutable(current.state) && <StateMessage kind="warning" title="Operation blocked" message={current.reasons.join(" ") || "The backend did not approve this capability."} />}
+        <Field label="Registered dataset" htmlFor="analysis-dataset"><DatasetSelect id="analysis-dataset" datasets={datasets} value={datasetId} onChange={(value) => { setDatasetId(value); setResult(null); }} /></Field>
+        <Field label="Operation" htmlFor="analysis-operation" help="Blocked operations remain visible with their exact reason."><OperationSelect options={operationItems} value={operation} onChange={(value) => { setOperation(value); setResult(null); }} /></Field>
+        {current && !operationIsExecutable(current.state) && <StateMessage kind="warning" title="Operation blocked" message={current.reasons.map(displayReason).join(" ") || "This capability is not ready for the selected dataset."} />}
         {parameterNames.includes("granularity") && <Field label="Period granularity" htmlFor="granularity"><Select id="granularity" value={granularity} onChange={(event) => setGranularity(event.target.value as "MONTH" | "YEAR")}><option value="MONTH">Month</option><option value="YEAR">Year</option></Select></Field>}
         {parameterNames.includes("missing_dimension") && <Field label="Missing dimension policy" htmlFor="missing-dimension"><Select id="missing-dimension" value={missingDimension} onChange={(event) => setMissingDimension(event.target.value as "BUCKET" | "EXCLUDE")}><option value="BUCKET">Bucket</option><option value="EXCLUDE">Exclude</option></Select></Field>}
-        {parameterNames.includes("as_of_date") && <Field label="As-of date" htmlFor="as-of-date" help={referenceDate ? `Approved dataset reference date: ${referenceDate}. The backend validates exact equality.` : "Use the explicitly approved observation date; today is never substituted."}><Input id="as-of-date" type="date" value={asOfDate} onChange={(event) => setAsOfDate(event.target.value)} /></Field>}
+        {parameterNames.includes("as_of_date") && <Field label="As-of date" htmlFor="as-of-date" help={referenceDate ? `Approved dataset reference date: ${referenceDate}. The request must match it exactly.` : "Use the explicitly approved observation date; today is never substituted."}><Input id="as-of-date" type="date" value={asOfDate} onChange={(event) => setAsOfDate(event.target.value)} /></Field>}
         <Button onClick={run} disabled={busy || !datasetId || !operation || !current || !operationIsExecutable(current.state) || (parameterNames.includes("as_of_date") && !asOfDate)}><Play size={15} /> {busy ? "Running…" : "Run analysis"}</Button>
-        {readiness && <div><div className="eyebrow">Readiness overview</div>{operationItems.map((item) => <div className="operation-row" key={item.identifier}><div><strong>{OPERATIONS[item.identifier]?.label || humanize(item.identifier)}</strong>{item.reasons.map((reason) => <div className="reason" key={reason}>{reason}</div>)}</div><StatusBadge status={item.state} /></div>)}</div>}
+        {readiness && <div><div className="eyebrow">Operation readiness</div>{operationItems.map((item) => <div className="operation-row" key={item.identifier}><div><strong>{OPERATIONS[item.identifier]?.label || humanize(item.identifier)}</strong>{item.reasons.map((reason) => <div className="reason" key={reason}>{displayReason(reason)}<details className="inline-technical"><summary>Technical code</summary><code>{reason}</code></details></div>)}</div><StatusBadge status={item.state} /></div>)}</div>}
       </div></Panel>
       <div className="stack">
-        {error && <StateMessage kind={error.status === "CLARIFICATION_REQUIRED" || error.status === "BLOCKED" || error.status === "DATA_QUALITY_BLOCKER" ? "warning" : "error"} title={error.status.replaceAll("_", " ")} message={error.message} />}
+        {error && <StateMessage kind={error.status === "CLARIFICATION_REQUIRED" || error.status === "BLOCKED" || error.status === "DATA_QUALITY_BLOCKER" ? "warning" : "error"} title={displayStatus(error.status)} message={error.message} />}
         {result ? <EvidenceRenderer status={result.status} evidence={result.evidence} limitations={result.limitations} /> : <Panel><EmptyState title="No analysis result" description="Select an exact dataset and a ready operation. Results, coverage, limitations and lineage will appear here." /></Panel>}
       </div>
     </div>}

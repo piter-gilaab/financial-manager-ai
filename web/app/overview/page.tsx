@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Database, FilePlus2 } from "lucide-react";
 import { useWorkspace } from "@/components/workspace-provider";
 import { EmptyState, LinkButton, LoadingState, PageHeader, Panel, PanelHeader, StateMessage, StatusBadge } from "@/components/ui";
+import { displayDomain } from "@/lib/presentation";
 
 export default function OverviewPage() {
   const { datasets, loadingDatasets, datasetError, selectedDataset, health, selectDataset } = useWorkspace();
@@ -27,12 +28,12 @@ export default function OverviewPage() {
       </div>
       <div className="grid-2">
         <Panel><PanelHeader title="Dataset portfolio" subtitle="Safe metadata only" /><div className="panel-body stack">
-          {Object.entries(domainCounts).sort().map(([domain, count]) => <div className="operation-row" key={domain}><div><strong>{domain.replaceAll("_", " ")}</strong><div className="reason">Current approved domain classification</div></div><span className="tabular">{count}</span></div>)}
+          {Object.entries(domainCounts).sort().map(([domain, count]) => <div className="operation-row" key={domain}><div><strong>{displayDomain(domain)}</strong><div className="reason">Current approved domain classification</div></div><span className="tabular">{count}</span></div>)}
           <Link className="button button-secondary" href="/datasets">Open datasets <ArrowRight size={15} /></Link>
         </div></Panel>
         <Panel><PanelHeader title={selectedDataset ? "Selected dataset" : "Choose a dataset"} subtitle="Runtime workspace context" /><div className="panel-body">
           {selectedDataset ? <div className="stack">
-            <div><div className="eyebrow">{selectedDataset.approved_domain || "Domain unconfirmed"}</div><h2 style={{ marginTop: 5 }}>{selectedDataset.source_filename}</h2><span className="truncate-id" title={selectedDataset.dataset_id}>{selectedDataset.dataset_id}</span></div>
+            <div><div className="eyebrow">{displayDomain(selectedDataset.approved_domain)}</div><h2 style={{ marginTop: 5 }}>{selectedDataset.source_filename}</h2><span className="truncate-id" title={selectedDataset.dataset_id}>{selectedDataset.dataset_id}</span></div>
             <div className="operation-row"><span>Readiness</span><StatusBadge status={selectedDataset.readiness_state} /></div>
             <div className="operation-row"><span>Available capabilities</span><strong className="tabular">{selectedDataset.supported_operations.length}</strong></div>
             {selectedDataset.limitations.length > 0 && <div><div className="eyebrow">Limitations</div><ul className="notice-list">{selectedDataset.limitations.map((item) => <li key={item}>{item}</li>)}</ul></div>}
