@@ -23,12 +23,12 @@ async function selectContaining(page: Page, label: string, text: string) {
 
 async function runAnalysis(page: Page, dataset: string, operation: string) {
   await page.goto("/analysis");
-  await selectContaining(page, "Exact registered dataset", dataset);
+  await selectContaining(page, "Registered dataset", dataset);
   await expect(page.getByLabel("Operation").locator(`option[value="${operation}"]`)).toBeEnabled();
   await page.getByLabel("Operation").selectOption(operation);
   await page.getByRole("button", { name: "Run analysis" }).click();
-  await expect(page.getByText("Authoritative backend evidence")).toBeVisible();
-  await expect(page.getByText("Exact evidence", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("Exact calculation result")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Coverage and limitations" })).toBeVisible();
 }
 
 test("application loads with actual API health and dataset portfolio", async ({ page }) => {
@@ -58,18 +58,65 @@ test("CSV upload progresses through profile, semantics, explicit domain and read
   await page.getByRole("button", { name: "Upload and profile" }).click();
   await expect(page.getByRole("heading", { name: "Deterministic profile" })).toBeVisible();
   await page.getByRole("button", { name: /Review semantic suggestions/ }).click();
+  const evidence = page.getByLabel("Decision evidence");
+  await expect(evidence).toHaveValue("");
+  await expect(evidence).not.toHaveValue(/Confirmed by dataset owner/i);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(page.locator(".semantic-card").first()).toBeVisible();
+    const pageWidth = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(pageWidth.scrollWidth, `onboarding-${width}: document width ${pageWidth.scrollWidth}px exceeds ${pageWidth.clientWidth}px`).toBeLessThanOrEqual(pageWidth.clientWidth);
+    await page.screenshot({ path: testInfo.outputPath(`onboarding-semantics-${width}.png`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await evidence.fill("Synthetic E2E source specification");
   for (const [column, role] of [["Date", "TRANSACTION_DATE"], ["Sales", "SALES"]]) {
     const meaning = page.getByLabel(`Meaning for ${column}`, { exact: true });
     await meaning.selectOption(role);
     const row = page.getByRole("row").filter({ has: meaning });
     if (column === "Date") await row.getByLabel("Date format for Date").selectOption("YYYY-MM-DD");
-    await row.getByRole("button", { name: "Confirm", exact: true }).click();
+    await row.getByRole("button", { name: "Confirm semantic role", exact: true }).click();
     await expect(page.getByText("Request not completed")).toHaveCount(0);
   }
-  await page.getByRole("button", { name: /Confirm domain and qualifiers/ }).click();
-  await page.getByLabel("Approved domain").selectOption("SALES_RECORD");
-  await expect(page.getByRole("heading", { name: "Domain approved" })).toBeVisible();
-  await page.getByRole("button", { name: /Review readiness/ }).click();
+  await page.getByRole("button", { name: /Review domain and qualifiers/ }).click();
+  let domainMutations = 0;
+  let confirmedDomainEvidence: string | undefined;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/domain-confirmation")) {
+      domainMutations += 1;
+      confirmedDomainEvidence = request.postDataJSON()?.evidence;
+    }
+  });
+  const domain = page.getByLabel("Proposed domain");
+  await domain.selectOption("PAYABLE");
+  await domain.selectOption("RECEIVABLE");
+  expect(domainMutations).toBe(0);
+  await domain.selectOption("SALES_RECORD");
+  expect(domainMutations).toBe(0);
+  await page.getByRole("button", { name: "Confirm domain" }).click();
+  await expect(page.getByRole("heading", { name: "Saved domain" })).toBeVisible();
+  expect(domainMutations).toBe(1);
+  expect(confirmedDomainEvidence).toBe("Synthetic E2E source specification");
+  await page.getByRole("button", { name: /Review saved decisions/ }).click();
+  await expect(page.getByRole("heading", { name: "Review saved decisions" })).toBeVisible();
+  await expect(page.getByText("Sales Record Count")).toBeVisible();
+  await expect(page.getByText("Required financial meaning is not confirmed.").first()).toBeVisible();
+  await expect(page.getByText("Binding validation returned MISSING_REQUIRED_SEMANTICS.")).toHaveCount(0);
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const pageWidth = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(pageWidth.scrollWidth, `onboarding-review-${width}: document width ${pageWidth.scrollWidth}px exceeds ${pageWidth.clientWidth}px`).toBeLessThanOrEqual(pageWidth.clientWidth);
+    await expect(page.getByRole("heading", { name: "Operation readiness" })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`onboarding-review-${width}.png`), fullPage: true });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("button", { name: /Open operation readiness/ }).click();
   await expect(page.getByText("Sales Record Count")).toBeVisible();
   await expect(page.getByRole("link", { name: /Analyze dataset/ })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("onboarding-ready-1440.png"), fullPage: true });
@@ -90,7 +137,9 @@ test("multi-sheet XLSX is a bounded clarification and selected sheet uploads", a
 });
 
 test("SALES_RECORD analysis uses actual HTTP evidence", async ({ page }, testInfo) => {
-  await runAnalysis(page, "e2e_sales.csv", "SALES_SUMMARY");
+  await runAnalysis(page, "e2e_sales.csv", "SALES_BY_PERIOD");
+  await expect(page.getByRole("img", { name: "Presentation view" })).toBeVisible();
+  await expect(page.getByRole("table", { name: "Exact authoritative evidence" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("analysis-sales-1440.png"), fullPage: true });
 });
 
@@ -136,19 +185,33 @@ test("chat session sends a question and handles clarification", async ({ page },
   await page.screenshot({ path: testInfo.outputPath("chat-clarification-1440.png"), fullPage: true });
 });
 
-test("responsive shell remains usable at 1440, 1024, 768 and 390", async ({ page }, testInfo) => {
+test("responsive shell remains usable at all release widths", async ({ page }, testInfo) => {
   const targets = [
-    { width: 1440, height: 1000, route: "/overview", name: "overview-1440" },
-    { width: 1024, height: 900, route: "/datasets", name: "datasets-1024" },
-    { width: 768, height: 1024, route: "/analysis", name: "analysis-768" },
-    { width: 390, height: 844, route: "/chat", name: "chat-390" },
+    { width: 1440, height: 1000, route: "/overview", name: "overview-1440", title: "Overview — Financial Manager AI" },
+    { width: 1024, height: 900, route: "/datasets", name: "datasets-1024", title: "Datasets — Financial Manager AI" },
+    { width: 820, height: 1000, route: "/analysis", name: "analysis-820", title: "Analysis — Financial Manager AI" },
+    { width: 768, height: 1024, route: "/anomalies", name: "anomalies-768", title: "Anomalies — Financial Manager AI" },
+    { width: 390, height: 844, route: "/chat", name: "chat-390", title: "Ask Financial Manager — Financial Manager AI" },
+    { width: 320, height: 720, route: "/datasets/new", name: "onboarding-320", title: "Add Dataset — Financial Manager AI" },
   ];
   for (const target of targets) {
     await page.setViewportSize(target);
     await page.goto(target.route);
+    await expect(page).toHaveTitle(target.title);
     await expect(page.locator("main")).toBeVisible();
     await expect(page.getByText("API Healthy", { exact: true })).toBeVisible();
-    if (target.width === 390) {
+    const shellWidth = await page.locator(".app-shell").evaluate((shell) => ({
+      clientWidth: shell.clientWidth,
+      scrollWidth: shell.scrollWidth,
+    }));
+    expect(shellWidth.scrollWidth, `${target.name}: application shell width ${shellWidth.scrollWidth}px exceeds ${shellWidth.clientWidth}px`).toBeLessThanOrEqual(shellWidth.clientWidth);
+    if (target.width === 1440) {
+      await page.keyboard.press("Tab");
+      await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(page.locator("main#main-content")).toBeFocused();
+    }
+    if (target.width <= 390) {
       const trigger = page.getByRole("button", { name: "Open navigation" });
       await expect(trigger).toBeVisible();
       await trigger.click();
