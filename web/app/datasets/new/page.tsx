@@ -1,19 +1,21 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useEffect, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { ArrowRight, UploadCloud } from "lucide-react";
 import { ApiClientError, api } from "@/lib/api-client";
-import { EXECUTABLE_DOMAINS, operationIsExecutable } from "@/lib/operations";
+import { operationIsExecutable } from "@/lib/operations";
 import type { DatasetProfile, DatasetSummary, Readiness, SemanticMapping } from "@/lib/types";
 import { displayCurrencyState, fileSize, humanize } from "@/lib/format";
+import { displayReason } from "@/lib/presentation";
 import { useWorkspace } from "@/components/workspace-provider";
 import { nextOnboardingStep } from "@/components/workflow-controls";
 import { MappingRow, type MappingOptions } from "@/components/semantic-mapping-row";
+import { ApprovalReview, DomainConfirmation, EMPTY_DECISION_EVIDENCE } from "@/components/onboarding-approval";
 import { Button, Field, Input, LinkButton, PageHeader, Panel, PanelHeader, Select, StateMessage, StatusBadge } from "@/components/ui";
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
-const STEP_LABELS = ["Upload", "Profile", "Semantics", "Confirm", "Ready"];
+const STEP_LABELS = ["Upload", "Profile", "Semantics", "Confirm", "Review", "Ready"];
 
 export default function OnboardingPage() {
   const [step, setStep] = useState<Step>(1);
@@ -27,7 +29,9 @@ export default function OnboardingPage() {
   const [profile, setProfile] = useState<DatasetProfile | null>(null);
   const [mappings, setMappings] = useState<SemanticMapping | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
-  const [evidence, setEvidence] = useState("Confirmed by dataset owner during web onboarding");
+  const [evidence, setEvidence] = useState(EMPTY_DECISION_EVIDENCE);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
+  const evidenceRef = useRef<HTMLInputElement>(null);
   const { refreshDatasets, selectDataset } = useWorkspace();
 
   const refreshCurrent = async (id: string) => {
@@ -35,6 +39,13 @@ export default function OnboardingPage() {
       api.dataset(id), api.profile(id), api.mappings(id), api.readiness(id),
     ]);
     setDataset(detail.data); setProfile(profileResponse.data); setMappings(mappingResponse.data); setReadiness(readinessResponse.data); selectDataset(detail.data);
+  };
+
+  const requireEvidence = () => {
+    if (evidence.trim()) { setEvidenceError(null); return true; }
+    setEvidenceError("Enter the source, owner record or policy that supports this financial decision.");
+    window.requestAnimationFrame(() => evidenceRef.current?.focus());
+    return false;
   };
 
   useEffect(() => {
@@ -72,7 +83,7 @@ export default function OnboardingPage() {
   };
 
   const decide = async (proposal: SemanticMapping["proposals"][number], decision: "CONFIRM" | "CORRECT" | "REJECT", role?: string, options: MappingOptions = {}) => {
-    if (!dataset) return;
+    if (!dataset || !requireEvidence()) return;
     setBusy(true); setError(null);
     try {
       await api.semanticDecision(dataset.dataset_id, {
@@ -85,7 +96,7 @@ export default function OnboardingPage() {
   };
 
   const confirmDomain = async (domain: string) => {
-    if (!dataset) return;
+    if (!dataset || !requireEvidence()) return;
     setBusy(true); setError(null);
     try { await api.confirmDomain(dataset.dataset_id, domain, evidence); await refreshCurrent(dataset.dataset_id); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "Domain could not be confirmed."); }
@@ -93,7 +104,7 @@ export default function OnboardingPage() {
   };
 
   const confirmQualifiers = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); if (!dataset) return;
+    event.preventDefault(); if (!dataset || !requireEvidence()) return;
     const form = new FormData(event.currentTarget);
     const body = Object.fromEntries([...form.entries()].filter(([, value]) => value).map(([key, value]) => [key, String(value)]));
     setBusy(true); setError(null);
@@ -105,6 +116,7 @@ export default function OnboardingPage() {
   const operations = readiness?.capabilities.flatMap((capability) => capability.operations) || [];
   const readyOperations = operations.filter((operation) => operationIsExecutable(operation.state));
   const suggestedDomain = mappings?.domain_suggestions[0];
+  const evidenceControl = <Field label="Decision evidence" htmlFor="mapping-evidence" help="Describe the source, owner record or policy that supports the decision. This text is saved with each authority-changing action." error={evidenceError || undefined}><Input ref={evidenceRef} id="mapping-evidence" value={evidence} placeholder="Example: Accounts payable export specification approved 2026-11-22" onChange={(event) => { setEvidence(event.target.value); if (event.target.value.trim()) setEvidenceError(null); }} maxLength={1000} aria-invalid={Boolean(evidenceError)} aria-describedby={`mapping-evidence-help${evidenceError ? " mapping-evidence-error" : ""}`} /></Field>;
 
   return <>
     <PageHeader title="Dataset onboarding" description="Safe ingestion, deterministic profile and explicit financial meaning approval." eyebrow="Controlled workflow" />
@@ -132,32 +144,33 @@ export default function OnboardingPage() {
     {step === 3 && mappings && <div className="stack">
       <StateMessage title="Suggestions require explicit decisions" message="No proposed meaning becomes financial authority until you confirm, correct or reject it." />
       <Panel><PanelHeader title="Semantic mapping" subtitle={`Mapping version ${mappings.mapping_version}`} /><div className="panel-body stack">
-        <Field label="Decision evidence" htmlFor="mapping-evidence" help="Recorded with each explicit semantic decision."><Input id="mapping-evidence" value={evidence} onChange={(event) => setEvidence(event.target.value)} maxLength={1000} /></Field>
-        <div className="table-wrap"><table className="table"><thead><tr><th>Source column</th><th>Suggested meaning</th><th>Evidence</th><th>Explicit action</th></tr></thead><tbody>{mappings.proposals.map((proposal) => <MappingRow key={proposal.column_id} proposal={proposal} busy={busy} onDecide={decide} />)}</tbody></table></div>
-        <div><Button onClick={() => setStep(nextOnboardingStep(3))}>Confirm domain and qualifiers <ArrowRight size={16} /></Button></div>
+        {evidenceControl}
+        <div className="semantic-decisions"><table className="table"><thead><tr><th>Source column</th><th>Suggested meaning</th><th>Evidence</th><th>Authority action</th></tr></thead><tbody>{mappings.proposals.map((proposal) => <MappingRow key={proposal.column_id} proposal={proposal} busy={busy} onDecide={decide} />)}</tbody></table></div>
+        <div><Button onClick={() => setStep(nextOnboardingStep(3))}>Review domain and qualifiers <ArrowRight size={16} /></Button></div>
       </div></Panel>
     </div>}
 
     {step === 4 && mappings && <div className="grid-2">
       <Panel><PanelHeader title="Domain confirmation" subtitle="Recognition does not imply executable support" /><div className="panel-body stack">
-        <div><span className="micro">Suggested domain</span><h2>{suggestedDomain || "No executable domain suggested"}</h2></div>
-        <Field label="Approved domain" htmlFor="domain"><Select id="domain" defaultValue={mappings.approved_domain || (suggestedDomain && EXECUTABLE_DOMAINS.includes(suggestedDomain as typeof EXECUTABLE_DOMAINS[number]) ? suggestedDomain : "")} onChange={(event) => event.target.value && void confirmDomain(event.target.value)} disabled={busy}><option value="">Select explicitly</option>{EXECUTABLE_DOMAINS.map((domain) => <option key={domain}>{domain}</option>)}</Select></Field>
-        <p className="field-help">Supported executable domains are limited to Sales Record, Payable, Receivable and Cash Transaction. Other recognized ontology domains remain non-executable.</p>
-        {mappings.approved_domain && <StateMessage title="Domain approved" message={mappings.approved_domain} />}
+        {evidenceControl}
+        <DomainConfirmation approvedDomain={mappings.approved_domain} suggestedDomain={suggestedDomain} busy={busy} onConfirm={confirmDomain} />
+        <p className="field-help">Executable domains remain limited to Sales Record, Accounts Payable, Accounts Receivable and Cash Transactions.</p>
       </div></Panel>
-      <Panel><PanelHeader title="Qualifiers and value policy" subtitle="Apply only when supported by source evidence" /><form className="panel-body stack" onSubmit={confirmQualifiers}>
+      <Panel><PanelHeader title="Qualifiers and value policy" subtitle="Save only values supported by the same evidence" /><form className="panel-body stack" onSubmit={confirmQualifiers}>
         {(mappings.approved_domain === "PAYABLE" || mappings.approved_domain === "RECEIVABLE") && <>
           <Field label="Amount basis" htmlFor="amount-basis"><Select id="amount-basis" name="amount_basis" defaultValue={mappings.qualifiers.amount_basis || ""}><option value="">Not confirmed</option><option value="OUTSTANDING_BALANCE">Outstanding balance</option></Select></Field>
           <Field label="Dataset reference date" htmlFor="reference-date" help="Approved observation date for aging and overdue analysis. Today is never substituted silently."><Input id="reference-date" name="dataset_reference_date" type="date" defaultValue={mappings.qualifiers.dataset_reference_date || ""} /></Field>
         </>}
         {mappings.approved_domain === "CASH_TRANSACTION" && <Field label="Cash amount convention" htmlFor="cash-convention"><Select id="cash-convention" name="cash_amount_convention" defaultValue={mappings.qualifiers.cash_amount_convention || ""}><option value="">Not confirmed</option><option value="MAGNITUDE_WITH_DIRECTION">Magnitude with confirmed direction</option><option value="SIGNED_WITH_DIRECTION">Signed amount with confirmed direction</option></Select></Field>}
-        <div><Button type="submit" disabled={busy}>Confirm supplied qualifiers</Button></div>
-        <div><Button type="button" variant="secondary" onClick={async () => { if (dataset) await refreshCurrent(dataset.dataset_id); setStep(5); }}>Review readiness <ArrowRight size={16} /></Button></div>
+        {(mappings.approved_domain === "PAYABLE" || mappings.approved_domain === "RECEIVABLE" || mappings.approved_domain === "CASH_TRANSACTION") && <div><Button type="submit" disabled={busy}>Save qualifiers</Button></div>}
+        <div><Button type="button" variant="secondary" disabled={!mappings.approved_domain || busy} onClick={async () => { if (dataset) await refreshCurrent(dataset.dataset_id); setStep(5); }}>Review saved decisions <ArrowRight size={16} /></Button></div>
       </form></Panel>
     </div>}
 
-    {step === 5 && dataset && readiness && <Panel><PanelHeader title="Operation-specific readiness" subtitle={`${readiness.canonical_domain || "Domain unconfirmed"} · ${displayCurrencyState(readiness.currency.state, readiness.currency.code)}`} /><div className="panel-body stack">
-      {operations.length === 0 ? <StateMessage kind="warning" title="No applicable operations" message="Required semantics or domain approval remain incomplete." /> : operations.map((operation) => <div className="operation-row" key={operation.identifier}><div><strong>{humanize(operation.identifier)}</strong>{operation.reasons.map((reason) => <div className="reason" key={reason}>{reason}</div>)}</div><StatusBadge status={operation.state} /></div>)}
+    {step === 5 && dataset && mappings && readiness && <ApprovalReview dataset={dataset} mappings={mappings} readiness={readiness} onContinue={() => setStep(6)} />}
+
+    {step === 6 && dataset && readiness && <Panel><PanelHeader title="Operation-specific readiness" subtitle={`${readiness.canonical_domain || "Domain unconfirmed"} · ${displayCurrencyState(readiness.currency.state, readiness.currency.code)}`} /><div className="panel-body stack">
+      {operations.length === 0 ? <StateMessage kind="warning" title="No applicable operations" message="Required financial meanings or domain approval remain incomplete." /> : operations.map((operation) => <div className="operation-row" key={operation.identifier}><div><strong>{humanize(operation.identifier)}</strong>{operation.reasons.map((reason) => <div className="reason" key={reason}>{displayReason(reason)}<details className="inline-technical"><summary>Technical code</summary><code>{reason}</code></details></div>)}</div><StatusBadge status={operation.state} /></div>)}
       <div>{readyOperations.length > 0 ? <LinkButton href={`/analysis?dataset=${dataset.dataset_id}`}>Analyze dataset <ArrowRight size={16} /></LinkButton> : <Button variant="secondary" onClick={() => setStep(3)}>Resolve semantic blockers</Button>}</div>
     </div></Panel>}
   </>;
