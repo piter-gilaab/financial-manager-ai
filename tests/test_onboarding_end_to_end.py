@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 from io import StringIO
+import hashlib
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 
@@ -92,6 +94,33 @@ class DynamicOnboardingEndToEndTests(unittest.TestCase):
         self.assertEqual(columns["Date"]["structural_type"], "AMBIGUOUS_DATE")
         self.assertIsNone(columns["Date"]["date_min"])
         self.assertEqual(columns["Amount"]["missing_count"], 1)
+
+    def test_manager_persists_preparation_and_refreshes_quality_after_authority_changes(self):
+        source = write_csv(
+            self.root / "prepared.csv",
+            "Invoice_ID,Amount\nINV-1,10.00\nINV-1,20.00\n",
+        )
+        added = self.manager.add(source)
+        dataset_id = added["dataset_id"]
+        preparation = self.manager.preparation(dataset_id)
+        initial_quality = self.manager.quality(dataset_id)
+
+        self.assertEqual(added["preparation_digest"], preparation["preparation_digest"])
+        self.assertEqual(added["quality_report_digest"], initial_quality["quality_report_digest"])
+        self.assertEqual(initial_quality["key_duplicate_candidates"], [])
+
+        changed = self.manager.confirm(
+            dataset_id, "Invoice_ID", "INVOICE_ID", evidence="owner",
+        )
+        refreshed_quality = self.manager.quality(dataset_id)
+
+        self.assertEqual(changed["preparation_digest"], added["preparation_digest"])
+        self.assertNotEqual(
+            changed["quality_report_digest"], added["quality_report_digest"],
+        )
+        self.assertEqual(len(refreshed_quality["key_duplicate_candidates"]), 1)
+        self.assertEqual(changed["readiness_state"], "BLOCKED")
+        self.assertNotIn("readiness_state", refreshed_quality)
 
     def test_malicious_and_sql_shell_shaped_values_remain_data(self):
         source = write_csv(
@@ -217,6 +246,62 @@ class DynamicOnboardingEndToEndTests(unittest.TestCase):
         with self.assertRaises(OnboardingError) as raised:
             DatasetRegistry(self.root / "registry-state").get(dataset_id)
         self.assertEqual(raised.exception.code, "registry_digest_mismatch")
+
+    def test_v200_shaped_workflow_remains_readable_and_is_not_rewritten(self):
+        source = write_csv(
+            self.root / "legacy-workflow.csv", "Date,Sales\n2026-01-01,10\n",
+        )
+        dataset_id = self.manager.add(source)["dataset_id"]
+        path = self.root / "onboarding" / "workflows" / dataset_id / "current.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        for key in (
+            "preparation_version", "preparation_digest",
+            "quality_report_version", "quality_report_digest",
+        ):
+            payload.pop(key)
+        payload["workflow_digest"] = ""
+        payload["workflow_digest"] = hashlib.sha256(json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        path.write_text(json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ) + "\n", encoding="utf-8")
+        legacy_bytes = path.read_bytes()
+
+        loaded = self.manager.status(dataset_id)
+
+        self.assertEqual(loaded["dataset_id"], dataset_id)
+        self.assertNotIn("preparation_digest", loaded)
+        self.assertNotIn("quality_report_digest", loaded)
+        self.assertEqual(path.read_bytes(), legacy_bytes)
+
+    def test_genuine_v200_tag_fixture_remains_readable_and_byte_immutable(self):
+        fixture = Path(__file__).parent / "fixtures" / "v2_0_onboarding"
+        target = self.root / "genuine-v2-state"
+        shutil.copytree(fixture, target)
+        before = {
+            item.relative_to(target): item.read_bytes()
+            for item in target.rglob("*") if item.is_file()
+        }
+        legacy = OnboardingManager(target, clock=lambda: FIXED_TIME)
+        dataset_id = "ds_c7fbb2e24b8c911b8087"
+
+        state = legacy.status(dataset_id)
+        profile = legacy.profile(dataset_id)
+        mapping = legacy.mappings(dataset_id)
+
+        self.assertEqual(state["dataset_id"], dataset_id)
+        self.assertEqual(profile["profile_digest"], state["profile_digest"])
+        self.assertEqual(mapping["mapping_digest"], state["mapping_digest"])
+        self.assertNotIn("preparation_digest", state)
+        with self.assertRaises(OnboardingError) as raised:
+            legacy.preparation(dataset_id)
+        self.assertEqual(raised.exception.code, "preparation_not_found")
+        after = {
+            item.relative_to(target): item.read_bytes()
+            for item in target.rglob("*") if item.is_file()
+        }
+        self.assertEqual(after, before)
 
     def test_stop_or_reject_after_registration_updates_current_registry_projection(self):
         source = write_csv(self.root / "registered.csv", "Date,Sales\n2026-01-01,10\n")

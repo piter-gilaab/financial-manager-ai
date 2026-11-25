@@ -1,13 +1,15 @@
 from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import tempfile
 import unittest
 
-from src.onboarding.canonical import CanonicalMapper
+from src.onboarding.canonical import CanonicalMapper, canonical_spec_from_dict
 from src.onboarding.decisions import SemanticDecisionService
 from src.onboarding.ingestion import SafeFileIngestor
 from src.onboarding.models import OnboardingError
+from src.onboarding.preparation import PreparationEngine
 from src.onboarding.profiling import DeterministicProfiler
 from src.onboarding.registry import DatasetRegistry
 from src.onboarding.semantics import SemanticMapper
@@ -68,6 +70,11 @@ class DatasetRegistryTests(unittest.TestCase):
         self.assertNotIn(str(self.root), payload)
         self.assertNotIn("<function", payload)
         self.assertEqual(json.loads(payload)["registry_version"], 1)
+        self.assertNotIn("preparation_digest", json.loads(payload))
+        self.assertNotIn("quality_report_digest", json.loads(payload))
+        before_read = current_path.read_bytes()
+        self.registry.get(ingested.dataset_id)
+        self.assertEqual(current_path.read_bytes(), before_read)
 
     def test_registry_versions_are_append_oriented_and_old_version_is_preserved(self):
         ingested, profile, mapping = self._approved_sales()
@@ -84,6 +91,33 @@ class DatasetRegistryTests(unittest.TestCase):
         self.assertEqual(first_path.read_bytes(), first_bytes)
         self.assertTrue((first_path.parent / "2.json").is_file())
         self.assertNotEqual(first.semantic_mapping_digest, second.semantic_mapping_digest)
+
+    def test_v21_registry_links_authenticated_preparation_quality_and_canonical_view(self):
+        ingested, profile, mapping = self._approved_sales()
+        engine = PreparationEngine()
+        preparation = engine.prepare(ingested, profile)
+        quality = engine.assess(preparation, profile, mapping)
+        canonical = CanonicalMapper().build_spec(
+            profile, mapping, preparation=preparation,
+        )
+
+        entry = self.registry.register(
+            ingested, profile, mapping, preparation=preparation, quality=quality,
+            canonical=canonical,
+        )
+
+        self.assertEqual(entry.preparation_digest, preparation.preparation_digest)
+        self.assertEqual(entry.quality_report_digest, quality.quality_report_digest)
+        self.assertIsNotNone(entry.canonical_view_digest)
+        canonical_path = (
+            self.onboarding_root / "artifacts" / ingested.dataset_id / "canonical"
+            / f"{entry.canonical_view_digest}.json"
+        )
+        payload = json.loads(canonical_path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["preparation_digest"], preparation.preparation_digest)
+        self.assertEqual(payload["source_fingerprint"], ingested.source_sha256)
+        self.assertEqual(payload["canonical_view_digest"], entry.canonical_view_digest)
+        self.assertEqual(self.registry.get(ingested.dataset_id), entry)
 
     def test_unapproved_or_mismatched_artifacts_cannot_be_registered(self):
         ingested, profile, approved = self._approved_sales()
@@ -107,6 +141,9 @@ class DatasetRegistryTests(unittest.TestCase):
         records = CanonicalMapper().map_records(ingested, spec)
 
         self.assertEqual(spec.canonical_domain, "SALES_RECORD")
+        self.assertEqual(spec.version, "1.0")
+        self.assertNotIn("cell_lineage", spec.lineage_policy)
+        self.assertNotIn("preparation_digest", spec.to_dict())
         self.assertEqual(spec.fields["SALES"]["source_column"], "Sales")
         self.assertEqual(spec.fields["SALES"]["normalization"], "PARSE_DECIMAL_EXACT")
         self.assertNotIn("SIGN_INVERSION", json.dumps(spec.to_dict()))
@@ -114,8 +151,65 @@ class DatasetRegistryTests(unittest.TestCase):
         self.assertEqual(records[0]["canonical_fields"]["SALES"]["normalized_value"], "10.50")
         self.assertEqual(records[0]["canonical_fields"]["COUNTRY"]["source_value"], "BR")
         self.assertEqual(records[0]["lineage"]["source_row_number"], 2)
+        self.assertNotIn("source_fingerprint", records[0]["lineage"])
+        self.assertNotIn("transformations", records[0]["canonical_fields"]["SALES"])
         self.assertEqual(records[1]["lineage"]["source_row_number"], 3)
         self.assertNotEqual(records[0]["canonical_record_id"], records[1]["canonical_record_id"])
+
+    def test_prepared_canonical_spec_authenticates_preparation_and_preserves_cell_lineage(self):
+        source = write_csv(
+            self.root / "prepared-sales.csv",
+            "Date,Country,Sales\n2026-01-01,NA,0.10\n2026-01-02,BR,\n",
+        )
+        ingested = SafeFileIngestor(
+            self.onboarding_root, clock=lambda: FIXED_TIME,
+        ).ingest(source)
+        profile = DeterministicProfiler().profile(ingested)
+        preparation = PreparationEngine().prepare(ingested, profile)
+        mapping = SemanticMapper().suggest(profile)
+        mapping = self.decisions.approve_domain(
+            mapping, domain="SALES_RECORD", evidence="owner",
+        )
+        for column in ("Date", "Country", "Sales"):
+            mapping = self.decisions.decide(
+                mapping, column=column, decision="CONFIRM", evidence="owner",
+            )
+
+        mapper = CanonicalMapper()
+        spec = mapper.build_spec(profile, mapping, preparation=preparation)
+        records = mapper.map_records_with_status(ingested, spec)
+
+        self.assertEqual(spec.version, "1.1")
+        self.assertEqual(spec.preparation_digest, preparation.preparation_digest)
+        self.assertEqual(spec.source_fingerprint, ingested.source_sha256)
+        self.assertEqual(spec.canonical_view_digest, spec.spec_digest)
+        country = records[0]["canonical_fields"]["COUNTRY"]
+        sales = records[0]["canonical_fields"]["SALES"]
+        missing_sales = records[1]["canonical_fields"]["SALES"]
+        self.assertEqual(country["source_value"], "NA")
+        self.assertEqual(country["normalized_value"], "NA")
+        self.assertEqual(country["source_column_id"], spec.fields["COUNTRY"]["column_id"])
+        self.assertEqual(sales["normalized_value"], "0.10")
+        self.assertIn(
+            "PARSE_DECIMAL_EXACT",
+            {item["id"] for item in sales["transformations"]},
+        )
+        self.assertEqual(missing_sales["status"], "source_missing")
+        self.assertIsNone(missing_sales["normalized_value"])
+        self.assertEqual(records[0]["lineage"]["source_fingerprint"], ingested.source_sha256)
+
+        tampered = spec.to_dict()
+        tampered["fields"]["SALES"]["normalization"] = "EXECUTE_SQL"
+        tampered["spec_digest"] = ""
+        tampered["canonical_view_digest"] = None
+        digest = hashlib.sha256(json.dumps(
+            tampered, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        tampered["spec_digest"] = digest
+        tampered["canonical_view_digest"] = digest
+        with self.assertRaises(OnboardingError) as raised:
+            canonical_spec_from_dict(tampered)
+        self.assertEqual(raised.exception.code, "canonical_spec_corrupt")
 
     def test_xlsx_canonical_lineage_preserves_actual_worksheet_row_number(self):
         from tests.onboarding_support import write_xlsx
