@@ -157,6 +157,8 @@ class MultiDomainExecutionAdapter:
             )
         except OnboardingError as error:
             outcome = AdapterOutcome.STALE_MAPPING if error.code == "artifact_mismatch" else (
+                AdapterOutcome.SCHEMA_MISMATCH
+                if error.code in {"quality_report_stale", "canonical_spec_stale"} else
                 AdapterOutcome.DATASET_BLOCKED if error.code == "dataset_not_found"
                 else AdapterOutcome.INVALID_REGISTRY
             )

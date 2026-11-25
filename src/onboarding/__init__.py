@@ -2,5 +2,13 @@
 
 from .manager import OnboardingManager
 from .models import IngestionLimits, OnboardingError
+from .preparation import DataQualityReport, PreparationEngine, PreparationManifest
 
-__all__ = ["IngestionLimits", "OnboardingError", "OnboardingManager"]
+__all__ = [
+    "DataQualityReport",
+    "IngestionLimits",
+    "OnboardingError",
+    "OnboardingManager",
+    "PreparationEngine",
+    "PreparationManifest",
+]

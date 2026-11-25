@@ -4,9 +4,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .decisions import SemanticDecisionService
+from .canonical import CanonicalMapper
 from .ingestion import SafeFileIngestor
 from .models import IngestionLimits, OnboardingError
 from .profiling import DeterministicProfiler
+from .preparation import PreparationEngine
 from .readiness import CapabilityDiscovery
 from .registry import DatasetRegistry
 from .semantics import SemanticMapper
@@ -18,10 +20,15 @@ class OnboardingManager:
                  anomaly_adapter_factory=None):
         self.root = Path(onboarding_root)
         self.clock = clock or (lambda: datetime.now(timezone.utc))
-        self._ingestor = SafeFileIngestor(self.root, limits=limits, clock=self.clock)
+        effective_limits = limits or IngestionLimits()
+        self._ingestor = SafeFileIngestor(
+            self.root, limits=effective_limits, clock=self.clock,
+        )
         self._profiler = DeterministicProfiler()
+        self._preparer = PreparationEngine(limits=effective_limits)
         self._mapper = SemanticMapper(provider=semantic_provider)
         self._decisions = SemanticDecisionService(clock=self.clock)
+        self._canonical = CanonicalMapper()
         self._registry = DatasetRegistry(self.root, clock=self.clock)
         self._discovery = CapabilityDiscovery(
             self.root, anomaly_adapter_factory=anomaly_adapter_factory,
@@ -37,9 +44,13 @@ class OnboardingManager:
             source_filename=source_filename,
         )
         profile = self._profiler.profile(dataset)
+        preparation = self._preparer.prepare(dataset, profile)
         mapping = self._mapper.suggest(profile)
+        quality = self._preparer.assess(preparation, profile, mapping)
         self._registry.save_profile(profile)
+        self._registry.save_preparation(preparation)
         self._registry.save_mapping(mapping)
+        self._registry.save_quality(quality)
         state = {
             "dataset_id": dataset.dataset_id,
             "lifecycle_state": "NEEDS_CONFIRMATION",
@@ -52,8 +63,12 @@ class OnboardingManager:
             "column_count": profile.column_count,
             "profile_version": profile.profile_version,
             "profile_digest": profile.profile_digest,
+            "preparation_version": preparation.preparation_version,
+            "preparation_digest": preparation.preparation_digest,
             "mapping_version": mapping.mapping_version,
             "mapping_digest": mapping.mapping_digest,
+            "quality_report_version": quality.quality_report_version,
+            "quality_report_digest": quality.quality_report_digest,
             "confirmation_required_count": sum(item.confirmation_required for item in mapping.proposals),
             "approved_domain": mapping.approved_domain,
             "currency_state": mapping.currency_state,
@@ -79,6 +94,12 @@ class OnboardingManager:
 
     def mappings(self, dataset_id: str) -> dict:
         return self._mapping(dataset_id).to_dict()
+
+    def preparation(self, dataset_id: str) -> dict:
+        return self._preparation(dataset_id).to_dict()
+
+    def quality(self, dataset_id: str) -> dict:
+        return self._quality(dataset_id).to_dict()
 
     def confirm(self, dataset_id: str, column: str, role: str, *, evidence: str,
                 value_mapping: dict[str, str] | None = None,
@@ -142,7 +163,8 @@ class OnboardingManager:
             mapping = self._registry.load_mapping(
                 dataset_id, state["mapping_version"], state["mapping_digest"],
             )
-            report = self._discovery.evaluate(profile, mapping)
+            quality = self._quality(dataset_id) if state.get("quality_report_digest") else None
+            report = self._discovery.evaluate(profile, mapping, quality)
         except OnboardingError as error:
             if error.code in {"invalid_dataset_id", "dataset_not_found"}:
                 raise
@@ -207,6 +229,10 @@ class OnboardingManager:
     def _after_mapping(self, dataset_id: str, mapping) -> dict:
         self._registry.save_mapping(mapping)
         state = self._state(dataset_id)
+        profile = self._profile(dataset_id)
+        preparation = self._preparation(dataset_id)
+        quality = self._preparer.assess(preparation, profile, mapping)
+        self._registry.save_quality(quality)
         state.update({
             "lifecycle_state": mapping.status,
             "mapping_version": mapping.mapping_version,
@@ -214,12 +240,19 @@ class OnboardingManager:
             "confirmation_required_count": sum(item.confirmation_required for item in mapping.proposals),
             "approved_domain": mapping.approved_domain,
             "currency_state": mapping.currency_state,
+            "quality_report_version": quality.quality_report_version,
+            "quality_report_digest": quality.quality_report_digest,
             "readiness_state": "BLOCKED",
         })
         if mapping.status == "SEMANTICALLY_APPROVED":
-            profile = self._profile(dataset_id)
             dataset = self._ingestor.load(dataset_id, state["ingestion_run_id"])
-            registered = self._registry.register(dataset, profile, mapping)
+            canonical = self._canonical.build_spec(
+                profile, mapping, preparation=preparation,
+            )
+            registered = self._registry.register(
+                dataset, profile, mapping, preparation=preparation, quality=quality,
+                canonical=canonical,
+            )
             # Binding authenticates workflow-to-registry identity. Publish the
             # REGISTERED transition before readiness probes use that same seam.
             state.update({
@@ -228,7 +261,7 @@ class OnboardingManager:
                 "registry_version": registered.registry_version,
             })
             self._write_state(state)
-            report = self._discovery.evaluate(profile, mapping)
+            report = self._discovery.evaluate(profile, mapping, quality)
             final = self._registry.record_readiness(dataset_id, report)
             state.update({
                 "lifecycle_state": final.lifecycle_state,
@@ -236,7 +269,9 @@ class OnboardingManager:
                 "registry_version": final.registry_version,
             })
         elif state.get("registry_version") is not None:
-            invalidated = self._registry.invalidate_mapping(dataset_id, mapping)
+            invalidated = self._registry.invalidate_mapping(
+                dataset_id, mapping, quality=quality,
+            )
             state["registry_version"] = invalidated.registry_version
         self._write_state(state)
         return dict(state)
@@ -253,6 +288,20 @@ class OnboardingManager:
         return self._registry.load_mapping(
             dataset_id, state["mapping_version"], state["mapping_digest"],
         )
+
+    def _preparation(self, dataset_id: str):
+        state = self._state(dataset_id)
+        digest = state.get("preparation_digest")
+        if digest is None:
+            raise OnboardingError("preparation_not_found")
+        return self._registry.load_preparation(dataset_id, digest)
+
+    def _quality(self, dataset_id: str):
+        state = self._state(dataset_id)
+        digest = state.get("quality_report_digest")
+        if digest is None:
+            raise OnboardingError("quality_report_not_found")
+        return self._registry.load_quality(dataset_id, digest)
 
     def _write_state(self, state: dict) -> None:
         stored = self._registry.save_workflow(state)

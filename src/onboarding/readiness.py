@@ -111,8 +111,17 @@ class CapabilityDiscovery:
         self._binder_factory = binder_factory
         self._anomaly_adapter_factory = anomaly_adapter_factory
 
-    def evaluate(self, profile: DatasetProfile, mapping: SemanticMapping) -> ReadinessReport:
+    def evaluate(self, profile: DatasetProfile, mapping: SemanticMapping,
+                 quality_report=None) -> ReadinessReport:
         if mapping.dataset_id != profile.dataset_id or mapping.profile_digest != profile.profile_digest:
+            from .models import OnboardingError
+            raise OnboardingError("artifact_mismatch")
+        if quality_report is not None and (
+            quality_report.dataset_id != profile.dataset_id
+            or quality_report.profile_digest != profile.profile_digest
+            or quality_report.mapping_digest != mapping.mapping_digest
+            or quality_report.currency_state != mapping.currency_state
+        ):
             from .models import OnboardingError
             raise OnboardingError("artifact_mismatch")
         return ReadinessReport(

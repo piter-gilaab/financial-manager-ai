@@ -9,8 +9,14 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Callable
 
-from .canonical import normalize_date
+from .canonical import CanonicalMappingSpec, canonical_spec_from_dict, normalize_date
 from .models import IngestedDataset, OnboardingError
+from .preparation import (
+    DataQualityReport,
+    PreparationManifest,
+    preparation_from_dict,
+    quality_report_from_dict,
+)
 from .profiling import DatasetProfile, is_missing_value, profile_from_dict
 from .semantics import SemanticMapping, mapping_from_dict
 
@@ -73,11 +79,23 @@ class RegistryEntry:
     readiness_state: str
     lineage: dict[str, Any]
     capability_readiness: dict[str, Any]
+    preparation_version: str | None = None
+    preparation_digest: str | None = None
+    quality_report_version: str | None = None
+    quality_report_digest: str | None = None
+    canonical_view_digest: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         payload = self.__dict__.copy()
         payload["unresolved_semantics"] = list(self.unresolved_semantics)
         payload["observed_date_range"] = list(self.observed_date_range)
+        for key in (
+            "preparation_version", "preparation_digest",
+            "quality_report_version", "quality_report_digest",
+            "canonical_view_digest",
+        ):
+            if payload[key] is None:
+                payload.pop(key)
         return payload
 
     @classmethod
@@ -104,6 +122,37 @@ class DatasetRegistry:
                   / f"{mapping.mapping_version}-{mapping.mapping_digest}.json")
         if not target.exists():
             _atomic_json(target, mapping.to_dict())
+        return target
+
+    def save_preparation(self, preparation: PreparationManifest) -> Path:
+        if not re_dataset_id(preparation.dataset_id):
+            raise OnboardingError("invalid_dataset_id")
+        preparation_from_dict(preparation.to_dict())
+        target = (self.root / "artifacts" / preparation.dataset_id / "preparations"
+                  / f"{preparation.preparation_digest}.json")
+        if not target.exists():
+            _atomic_json(target, preparation.to_dict())
+        return target
+
+    def save_quality(self, report: DataQualityReport) -> Path:
+        if not re_dataset_id(report.dataset_id):
+            raise OnboardingError("invalid_dataset_id")
+        quality_report_from_dict(report.to_dict())
+        target = (self.root / "artifacts" / report.dataset_id / "quality"
+                  / f"{report.quality_report_digest}.json")
+        if not target.exists():
+            _atomic_json(target, report.to_dict())
+        return target
+
+    def save_canonical(self, spec: CanonicalMappingSpec) -> Path:
+        if not re_dataset_id(spec.dataset_id):
+            raise OnboardingError("invalid_dataset_id")
+        canonical_spec_from_dict(spec.to_dict())
+        digest = spec.canonical_view_digest or spec.spec_digest
+        target = (self.root / "artifacts" / spec.dataset_id / "canonical"
+                  / f"{digest}.json")
+        if not target.exists():
+            _atomic_json(target, spec.to_dict())
         return target
 
     def current_dataset_ids(self) -> tuple[str, ...]:
@@ -159,14 +208,32 @@ class DatasetRegistry:
                     "NEEDS_CONFIRMATION", "SEMANTICALLY_APPROVED", "REGISTERED", "READY",
                     "BLOCKED", "REJECTED"} or payload.get("readiness_state") not in {"READY", "BLOCKED"}:
                 raise OnboardingError("workflow_corrupt")
-            self.load_profile(dataset_id, payload["profile_digest"])
-            self.load_mapping(dataset_id, payload["mapping_version"], payload["mapping_digest"])
+            profile = self.load_profile(dataset_id, payload["profile_digest"])
+            mapping = self.load_mapping(
+                dataset_id, payload["mapping_version"], payload["mapping_digest"],
+            )
+            if mapping.profile_digest != profile.profile_digest:
+                raise OnboardingError("artifact_mismatch")
             if payload.get("registry_version") is not None:
                 current = self.get(dataset_id)
                 if (current.registry_version != payload["registry_version"]
                         or current.semantic_mapping_digest != payload["mapping_digest"]
                         or current.lifecycle_state != payload["lifecycle_state"]):
                     raise OnboardingError("artifact_mismatch")
+            if payload.get("preparation_digest") is not None:
+                preparation = self.load_preparation(
+                    dataset_id, payload["preparation_digest"],
+                )
+                if preparation.preparation_version != payload.get("preparation_version"):
+                    raise OnboardingError("artifact_mismatch")
+            if payload.get("quality_report_digest") is not None:
+                quality = self.load_quality(dataset_id, payload["quality_report_digest"])
+                if (quality.quality_report_version != payload.get("quality_report_version")
+                        or quality.profile_digest != payload["profile_digest"]
+                        or quality.preparation_digest != payload.get("preparation_digest")):
+                    raise OnboardingError("artifact_mismatch")
+                if quality.mapping_digest != payload["mapping_digest"]:
+                    raise OnboardingError("quality_report_stale")
             return payload
         except FileNotFoundError:
             raise OnboardingError("dataset_not_found") from None
@@ -198,16 +265,100 @@ class DatasetRegistry:
             raise OnboardingError("artifact_mismatch")
         return mapping
 
+    def load_preparation(self, dataset_id: str, digest: str) -> PreparationManifest:
+        if not re_dataset_id(dataset_id):
+            raise OnboardingError("invalid_dataset_id")
+        target = self.root / "artifacts" / dataset_id / "preparations" / f"{digest}.json"
+        try:
+            preparation = preparation_from_dict(
+                json.loads(target.read_text(encoding="utf-8")),
+            )
+        except FileNotFoundError:
+            raise OnboardingError("preparation_not_found") from None
+        except (OSError, ValueError, TypeError):
+            raise OnboardingError("preparation_corrupt") from None
+        if (preparation.dataset_id != dataset_id
+                or preparation.preparation_digest != digest):
+            raise OnboardingError("artifact_mismatch")
+        return preparation
+
+    def load_quality(self, dataset_id: str, digest: str) -> DataQualityReport:
+        if not re_dataset_id(dataset_id):
+            raise OnboardingError("invalid_dataset_id")
+        target = self.root / "artifacts" / dataset_id / "quality" / f"{digest}.json"
+        try:
+            report = quality_report_from_dict(
+                json.loads(target.read_text(encoding="utf-8")),
+            )
+        except FileNotFoundError:
+            raise OnboardingError("quality_report_not_found") from None
+        except (OSError, ValueError, TypeError):
+            raise OnboardingError("quality_report_corrupt") from None
+        if report.dataset_id != dataset_id or report.quality_report_digest != digest:
+            raise OnboardingError("artifact_mismatch")
+        return report
+
+    def load_canonical(self, dataset_id: str, digest: str) -> CanonicalMappingSpec:
+        if not re_dataset_id(dataset_id):
+            raise OnboardingError("invalid_dataset_id")
+        target = self.root / "artifacts" / dataset_id / "canonical" / f"{digest}.json"
+        try:
+            spec = canonical_spec_from_dict(
+                json.loads(target.read_text(encoding="utf-8")),
+            )
+        except FileNotFoundError:
+            raise OnboardingError("canonical_spec_not_found") from None
+        except (OSError, ValueError, TypeError):
+            raise OnboardingError("canonical_spec_corrupt") from None
+        if (spec.dataset_id != dataset_id
+                or (spec.canonical_view_digest or spec.spec_digest) != digest):
+            raise OnboardingError("artifact_mismatch")
+        return spec
+
     def register(self, dataset: IngestedDataset, profile: DatasetProfile,
-                 mapping: SemanticMapping) -> RegistryEntry:
+                 mapping: SemanticMapping, *, preparation: PreparationManifest | None = None,
+                 quality: DataQualityReport | None = None,
+                 canonical: CanonicalMappingSpec | None = None) -> RegistryEntry:
         if (dataset.dataset_id != profile.dataset_id or dataset.source_sha256 != profile.source_sha256
                 or mapping.dataset_id != profile.dataset_id
                 or mapping.profile_digest != profile.profile_digest):
             raise OnboardingError("artifact_mismatch")
         if mapping.status != "SEMANTICALLY_APPROVED" or mapping.approved_domain is None:
             raise OnboardingError("mapping_not_approved")
+        if preparation is not None and (
+            preparation.dataset_id != dataset.dataset_id
+            or preparation.source_fingerprint != dataset.source_sha256
+            or preparation.profile_digest != profile.profile_digest
+        ):
+            raise OnboardingError("artifact_mismatch")
+        if quality is not None and (
+            preparation is None
+            or quality.dataset_id != dataset.dataset_id
+            or quality.preparation_digest != preparation.preparation_digest
+            or quality.profile_digest != profile.profile_digest
+            or quality.mapping_digest != mapping.mapping_digest
+        ):
+            raise OnboardingError("artifact_mismatch")
+        if preparation is not None and canonical is None:
+            raise OnboardingError("canonical_spec_required")
+        if canonical is not None and (
+            preparation is None
+            or canonical.dataset_id != dataset.dataset_id
+            or canonical.profile_digest != profile.profile_digest
+            or canonical.semantic_mapping_digest != mapping.mapping_digest
+            or canonical.preparation_digest != preparation.preparation_digest
+            or canonical.source_fingerprint != dataset.source_sha256
+            or canonical.canonical_view_digest != canonical.spec_digest
+        ):
+            raise OnboardingError("artifact_mismatch")
         self.save_profile(profile)
         self.save_mapping(mapping)
+        if preparation is not None:
+            self.save_preparation(preparation)
+        if quality is not None:
+            self.save_quality(quality)
+        if canonical is not None:
+            self.save_canonical(canonical)
         try:
             previous = self.get(dataset.dataset_id)
         except OnboardingError as error:
@@ -282,6 +433,16 @@ class DatasetRegistry:
                 "semantic_mapping_digest": mapping.mapping_digest,
             },
             capability_readiness={},
+            preparation_version=(None if preparation is None
+                                 else preparation.preparation_version),
+            preparation_digest=(None if preparation is None
+                                else preparation.preparation_digest),
+            quality_report_version=(None if quality is None
+                                    else quality.quality_report_version),
+            quality_report_digest=(None if quality is None
+                                   else quality.quality_report_digest),
+            canonical_view_digest=(None if canonical is None
+                                   else canonical.canonical_view_digest),
         )
         entry = self._seal(entry)
         directory = self.root / "registry" / dataset.dataset_id
@@ -307,9 +468,32 @@ class DatasetRegistry:
                     or entry.lifecycle_state not in {"REGISTERED", "READY", "BLOCKED", "REJECTED", "NEEDS_CONFIRMATION"}
                     or entry.readiness_state not in {"READY", "BLOCKED"}):
                 raise OnboardingError("registry_corrupt")
-            self.load_profile(dataset_id, entry.profile_digest)
-            self.load_mapping(dataset_id, entry.semantic_mapping_version,
-                              entry.semantic_mapping_digest)
+            profile = self.load_profile(dataset_id, entry.profile_digest)
+            mapping = self.load_mapping(dataset_id, entry.semantic_mapping_version,
+                                        entry.semantic_mapping_digest)
+            if mapping.profile_digest != profile.profile_digest:
+                raise OnboardingError("artifact_mismatch")
+            if entry.preparation_digest is not None:
+                preparation = self.load_preparation(dataset_id, entry.preparation_digest)
+                if preparation.preparation_version != entry.preparation_version:
+                    raise OnboardingError("artifact_mismatch")
+            if entry.quality_report_digest is not None:
+                quality = self.load_quality(dataset_id, entry.quality_report_digest)
+                if (quality.quality_report_version != entry.quality_report_version
+                        or quality.profile_digest != entry.profile_digest
+                        or quality.preparation_digest != entry.preparation_digest):
+                    raise OnboardingError("artifact_mismatch")
+                if quality.mapping_digest != entry.semantic_mapping_digest:
+                    raise OnboardingError("quality_report_stale")
+            if entry.canonical_view_digest is not None:
+                canonical = self.load_canonical(
+                    dataset_id, entry.canonical_view_digest,
+                )
+                if (canonical.profile_digest != entry.profile_digest
+                        or canonical.preparation_digest != entry.preparation_digest):
+                    raise OnboardingError("artifact_mismatch")
+                if canonical.semantic_mapping_digest != entry.semantic_mapping_digest:
+                    raise OnboardingError("canonical_spec_stale")
             capabilities = entry.capability_readiness.get("capabilities", [])
             available = any(item.get("state") in {"AVAILABLE", "AVAILABLE_WITH_LIMITATIONS"}
                             for item in capabilities
@@ -357,9 +541,15 @@ class DatasetRegistry:
         _atomic_json(directory / "current.json", updated.to_dict())
         return updated
 
-    def invalidate_mapping(self, dataset_id: str, mapping: SemanticMapping) -> RegistryEntry:
+    def invalidate_mapping(self, dataset_id: str, mapping: SemanticMapping, *,
+                           quality: DataQualityReport | None = None) -> RegistryEntry:
         current = self.get(dataset_id)
         if mapping.dataset_id != dataset_id or mapping.profile_digest != current.profile_digest:
+            raise OnboardingError("artifact_mismatch")
+        if quality is not None and (
+            quality.dataset_id != dataset_id
+            or quality.mapping_digest != mapping.mapping_digest
+        ):
             raise OnboardingError("artifact_mismatch")
         version = current.registry_version + 1
         updated = replace(
@@ -374,6 +564,11 @@ class DatasetRegistry:
             lifecycle_state=mapping.status,
             readiness_state="BLOCKED",
             capability_readiness={},
+            quality_report_version=(current.quality_report_version if quality is None
+                                    else quality.quality_report_version),
+            quality_report_digest=(current.quality_report_digest if quality is None
+                                   else quality.quality_report_digest),
+            canonical_view_digest=None,
             entry_digest="",
         )
         updated = self._seal(updated)
